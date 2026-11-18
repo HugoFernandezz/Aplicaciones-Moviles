@@ -20,7 +20,8 @@ data class AjustesApp(
     val diasAntelacion: Int = 15,
     /** Avisar de tareas y trabajos pendientes. */
     val avisosTareas: Boolean = true,
-    val tema: TemaApp = TemaApp.SISTEMA
+    /** Claro por defecto: el módulo de Inicio todavía solo tiene colores claros. */
+    val tema: TemaApp = TemaApp.CLARO
 ) {
     companion object {
         /** Opciones que se ofrecen en Ajustes para los días de antelación. */

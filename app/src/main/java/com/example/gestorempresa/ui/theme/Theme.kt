@@ -1,38 +1,41 @@
 package com.example.gestorempresa.ui.theme
 
-import android.app.Activity
 import android.os.Build
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
-private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
-)
-
 private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
-
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
+    primary = AzulPrincipal, onPrimary = Color.White,
+    primaryContainer = AzulContenedor, onPrimaryContainer = AzulSobreContenedor,
+    secondary = VerdeSecundario, onSecondary = Color.White, secondaryContainer = VerdeContenedor,
+    background = FondoClaro, onBackground = TextoClaro,
+    surface = Color.White, onSurface = TextoClaro,
+    surfaceVariant = VarianteClara, onSurfaceVariant = TextoVarianteClaro,
+    surfaceContainer = VarianteClara, // fondo de la barra de navegación inferior
+    outline = BordeClaro, error = ErrorClaro, onError = Color.White
 )
 
+private val DarkColorScheme = darkColorScheme(
+    primary = AzulPrincipalOscuro, onPrimary = SobreAzulOscuro,
+    primaryContainer = AzulContenedorOscuro, onPrimaryContainer = AzulSobreContenedorOscuro,
+    secondary = VerdeSecundarioOscuro, secondaryContainer = VerdeContenedorOscuro,
+    background = FondoOscuro, onBackground = TextoOscuro,
+    surface = SuperficieOscura, onSurface = TextoOscuro,
+    surfaceVariant = VarianteOscura, onSurfaceVariant = TextoVarianteOscuro,
+    surfaceContainer = VarianteOscura, // fondo de la barra de navegación inferior
+    outline = BordeOscuro, error = ErrorOscuro, onError = SobreErrorOscuro
+)
+
+/**
+ * Tema general de la aplicación.
+ * [darkTheme] lo decide MainActivity según la preferencia elegida en Ajustes.
+ */
 @Composable
 fun GestorEmpresaTheme(
     darkTheme: Boolean = false,
