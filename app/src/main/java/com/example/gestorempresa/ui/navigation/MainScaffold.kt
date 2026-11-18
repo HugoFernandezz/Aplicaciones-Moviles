@@ -6,6 +6,14 @@ import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -17,6 +25,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import com.example.gestorempresa.domain.auth.SesionUsuario
 import com.example.gestorempresa.ui.home.HomeListsContent
 import com.example.gestorempresa.ui.profile.ProfileScreen
@@ -24,11 +33,14 @@ import com.example.gestorempresa.ui.profile.ProfileViewModel
 import com.example.gestorempresa.ui.settings.SettingsScreen
 import com.example.gestorempresa.ui.settings.SettingsViewModel
 
-/** Las tres secciones de la barra de navegación inferior. */
-enum class SeccionPrincipal(val titulo: String, val icono: String) {
-    INICIO("Inicio", "🏠"),
-    PERFIL("Perfil", "👤"),
-    AJUSTES("Ajustes", "⚙️")
+/**
+ * Las tres secciones de la barra de navegación inferior.
+ * Cada una tiene un icono relleno (pestaña seleccionada) y otro de contorno (no seleccionada).
+ */
+enum class SeccionPrincipal(val titulo: String, val iconoSeleccionado: ImageVector, val icono: ImageVector) {
+    INICIO("Inicio", Icons.Filled.Home, Icons.Outlined.Home),
+    PERFIL("Perfil", Icons.Filled.Person, Icons.Outlined.Person),
+    AJUSTES("Ajustes", Icons.Filled.Settings, Icons.Outlined.Settings)
 }
 
 /**
@@ -55,10 +67,12 @@ fun MainScaffold(
         bottomBar = {
             NavigationBar {
                 SeccionPrincipal.entries.forEach { opcion ->
+                    val seleccionada = seccion == opcion
                     NavigationBarItem(
-                        selected = seccion == opcion,
+                        selected = seleccionada,
                         onClick = { seccion = opcion },
-                        icon = { Text(opcion.icono) },
+                        // contentDescription = null porque el texto de debajo ya describe el icono.
+                        icon = { Icon(if (seleccionada) opcion.iconoSeleccionado else opcion.icono, contentDescription = null) },
                         label = { Text(opcion.titulo) }
                     )
                 }

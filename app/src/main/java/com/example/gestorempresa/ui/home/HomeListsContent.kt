@@ -19,6 +19,7 @@ import com.example.gestorempresa.data.local.HomeDatabase
 import com.example.gestorempresa.domain.auth.SesionUsuario
 import com.example.gestorempresa.ui.detail.DetailScreen
 import com.example.gestorempresa.ui.detail.DetailViewModel
+import com.example.gestorempresa.ui.theme.LocalTemaOscuro
 
 /** El miembro 3 recibe tipo e id mediante onOpenDetails, sin duplicar sus pantallas. */
 @Composable
@@ -80,12 +81,7 @@ fun HomeListsContent(session: SesionUsuario, modifier: Modifier = Modifier,
                     LazyRow(modifier = Modifier.testTag("module-menu"), contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         items(menu, key = { it.first }) { (route, title) ->
                             FilterChip(selected = route == destination, onClick = { navigate(route) }, label = { Text(title) }, enabled = !saving,
-                                colors = FilterChipDefaults.filterChipColors(
-                                    containerColor = if (route == "obligations" && noticeUrgent) Color(0xFFFFE2DE) else Color(0xFFF2EBDD),
-                                    labelColor = if (route == "obligations" && noticeUrgent) Color(0xFF9B1C12) else Color(0xFF332D26),
-                                    selectedContainerColor = if (route == "obligations" && noticeUrgent) Color(0xFFFFC9C2) else Color(0xFFE5D8C4),
-                                    selectedLabelColor = if (route == "obligations" && noticeUrgent) Color(0xFF7D160E) else Color(0xFF29231D)
-                                ))
+                                colors = menuChipColors(urgente = route == "obligations" && noticeUrgent))
                         }
                     }
                 }
@@ -182,5 +178,25 @@ fun HomeListsContent(session: SesionUsuario, modifier: Modifier = Modifier,
                 dismissButton = { TextButton(enabled = !saving, onClick = { deletingItem = null; workspace.saveError.value = null }) { Text("Cancelar") } }
             )
         }
+    }
+}
+
+/** Colores de los chips del menú superior, en versión clara y oscura. Los avisos urgentes se ven en rojo. */
+@Composable
+private fun menuChipColors(urgente: Boolean): SelectableChipColors {
+    val oscuro = LocalTemaOscuro.current
+    return when {
+        urgente && oscuro -> FilterChipDefaults.filterChipColors(
+            containerColor = Color(0xFF5C1F1A), labelColor = Color(0xFFFFB4AB),
+            selectedContainerColor = Color(0xFF7A2A22), selectedLabelColor = Color(0xFFFFDAD6))
+        urgente -> FilterChipDefaults.filterChipColors(
+            containerColor = Color(0xFFFFE2DE), labelColor = Color(0xFF9B1C12),
+            selectedContainerColor = Color(0xFFFFC9C2), selectedLabelColor = Color(0xFF7D160E))
+        oscuro -> FilterChipDefaults.filterChipColors(
+            containerColor = Color(0xFF2B2825), labelColor = Color(0xFFECE7E1),
+            selectedContainerColor = Color(0xFF4A4036), selectedLabelColor = Color(0xFFFFFFFF))
+        else -> FilterChipDefaults.filterChipColors(
+            containerColor = Color(0xFFF2EBDD), labelColor = Color(0xFF332D26),
+            selectedContainerColor = Color(0xFFE5D8C4), selectedLabelColor = Color(0xFF29231D))
     }
 }

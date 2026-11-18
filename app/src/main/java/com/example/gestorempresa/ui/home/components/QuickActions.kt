@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.example.gestorempresa.ui.theme.LocalTemaOscuro
 
 @Composable
 fun QuickActions(
@@ -23,6 +24,9 @@ fun QuickActions(
     onParteDiario: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // En modo oscuro se usan tonos más claros para que el texto se lea sobre fondo oscuro.
+    val oscuro = LocalTemaOscuro.current
+
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -41,25 +45,25 @@ fun QuickActions(
         ) {
             QuickActionButton(
                 texto = "+ Nuevo servicio",
-                color = Color(0xFF9A4C00),
+                color = if (oscuro) Color(0xFFFFB77C) else Color(0xFF9A4C00),
                 onClick = onNuevaObra
             )
 
             QuickActionButton(
                 texto = "+ Alta empleado",
-                color = Color(0xFF285E8E),
+                color = if (oscuro) Color(0xFF9DC7EC) else Color(0xFF285E8E),
                 onClick = onAltaEmpleado
             )
 
             QuickActionButton(
                 texto = "Gasto / Ingreso",
-                color = Color(0xFF22684A),
+                color = if (oscuro) Color(0xFF8FD6B0) else Color(0xFF22684A),
                 onClick = onMovimiento
             )
 
             QuickActionButton(
                 texto = "Parte diario",
-                color = Color(0xFF67408C),
+                color = if (oscuro) Color(0xFFD3B5F5) else Color(0xFF67408C),
                 onClick = onParteDiario
             )
         }

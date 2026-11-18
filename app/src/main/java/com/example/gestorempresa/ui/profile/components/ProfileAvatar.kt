@@ -8,6 +8,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -57,10 +60,10 @@ fun ProfileAvatar(
                 )
             }
         }
-        // Pequeña insignia con una cámara para indicar que la foto se puede cambiar.
+        // Pequeña insignia con un lápiz para indicar que la foto se puede cambiar.
         if (onClick != null) {
             Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary, shadowElevation = 2.dp) {
-                Text("📷", Modifier.padding(6.dp), fontSize = 14.sp)
+                Icon(Icons.Filled.Edit, contentDescription = null, modifier = Modifier.padding(6.dp).size(18.dp))
             }
         }
     }

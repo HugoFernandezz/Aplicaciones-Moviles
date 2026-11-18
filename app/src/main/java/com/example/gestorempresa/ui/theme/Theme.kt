@@ -7,6 +7,8 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
@@ -17,7 +19,9 @@ private val LightColorScheme = lightColorScheme(
     background = FondoClaro, onBackground = TextoClaro,
     surface = Color.White, onSurface = TextoClaro,
     surfaceVariant = VarianteClara, onSurfaceVariant = TextoVarianteClaro,
-    surfaceContainer = VarianteClara, // fondo de la barra de navegación inferior
+    // Fondos de tarjetas, menús y barra inferior (sin ellos Material usa tonos lilas por defecto).
+    surfaceContainerLowest = Color.White, surfaceContainerLow = Color(0xFFFAF7F2),
+    surfaceContainer = VarianteClara, surfaceContainerHigh = Color(0xFFECE8E1), surfaceContainerHighest = Color(0xFFE6E1D9),
     outline = BordeClaro, error = ErrorClaro, onError = Color.White
 )
 
@@ -28,9 +32,16 @@ private val DarkColorScheme = darkColorScheme(
     background = FondoOscuro, onBackground = TextoOscuro,
     surface = SuperficieOscura, onSurface = TextoOscuro,
     surfaceVariant = VarianteOscura, onSurfaceVariant = TextoVarianteOscuro,
-    surfaceContainer = VarianteOscura, // fondo de la barra de navegación inferior
+    surfaceContainerLowest = Color(0xFF121110), surfaceContainerLow = SuperficieOscura,
+    surfaceContainer = VarianteOscura, surfaceContainerHigh = Color(0xFF35312D), surfaceContainerHighest = Color(0xFF403B36),
     outline = BordeOscuro, error = ErrorOscuro, onError = SobreErrorOscuro
 )
+
+/**
+ * Indica a cualquier pantalla si la app está en modo oscuro.
+ * Útil para colores propios que no vienen de MaterialTheme. Uso: `val oscuro = LocalTemaOscuro.current`
+ */
+val LocalTemaOscuro = staticCompositionLocalOf { false }
 
 /**
  * Tema general de la aplicación.
@@ -53,9 +64,11 @@ fun GestorEmpresaTheme(
         else -> LightColorScheme
     }
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography,
-        content = content
-    )
+    CompositionLocalProvider(LocalTemaOscuro provides darkTheme) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = Typography,
+            content = content
+        )
+    }
 }
