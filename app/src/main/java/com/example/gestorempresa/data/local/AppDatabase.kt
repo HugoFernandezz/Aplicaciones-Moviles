@@ -6,6 +6,8 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.example.gestorempresa.data.local.dao.EmpleadoDao
 import com.example.gestorempresa.data.local.dao.AuthDao
+import com.example.gestorempresa.data.local.dao.AjustesDao
+import com.example.gestorempresa.data.local.dao.PerfilDao
 import com.example.gestorempresa.data.local.entities.*
 
 @Database(
@@ -13,9 +15,10 @@ import com.example.gestorempresa.data.local.entities.*
                 RegistroHorasEntity::class, SubcontratadoEntity::class,
                 ProveedorEntity::class, MaterialEntity::class,
                 ConsumoMaterialEntity::class, EmpresaEntity::class,
-                UsuarioEntity::class, SesionEntity::class
+                UsuarioEntity::class, SesionEntity::class,
+                PerfilEntity::class, AjustesEntity::class
                ],
-    version = 4,
+    version = 5,
     exportSchema = true
 )
 
@@ -23,6 +26,8 @@ abstract class AppDatabase : RoomDatabase() {
 
     abstract fun empleadoDao(): EmpleadoDao
     abstract fun authDao(): AuthDao
+    abstract fun perfilDao(): PerfilDao
+    abstract fun ajustesDao(): AjustesDao
 
     companion object {
         @Volatile
@@ -34,7 +39,7 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "gestor_empresa_db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build()
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).build()
                 INSTANCE = instance
                 instance
             }
