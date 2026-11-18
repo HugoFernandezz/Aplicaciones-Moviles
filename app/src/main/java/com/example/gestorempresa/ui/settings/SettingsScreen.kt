@@ -6,6 +6,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -78,6 +79,11 @@ fun SettingsContent(
         snackbarHost = { SnackbarHost(snackbar) },
         contentWindowInsets = WindowInsets(0) // los márgenes del sistema los pone la navegación principal
     ) { padding ->
+        // Mientras se leen los ajustes guardados no se muestran las opciones, para no cambiar valores aún sin cargar.
+        if (state.cargando) {
+            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            return@Scaffold
+        }
         Column(
             Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)

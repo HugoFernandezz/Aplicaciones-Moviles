@@ -2,13 +2,10 @@ package com.example.gestorempresa.ui.home
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -19,7 +16,9 @@ import com.example.gestorempresa.data.local.HomeDatabase
 import com.example.gestorempresa.domain.auth.SesionUsuario
 import com.example.gestorempresa.ui.detail.DetailScreen
 import com.example.gestorempresa.ui.detail.DetailViewModel
-import com.example.gestorempresa.ui.theme.LocalTemaOscuro
+import com.example.gestorempresa.ui.navigation.BarraSuperior
+import com.example.gestorempresa.ui.navigation.MenuLateral
+import kotlinx.coroutines.launch
 
 /** El miembro 3 recibe tipo e id mediante onOpenDetails, sin duplicar sus pantallas. */
 @Composable
@@ -63,86 +62,99 @@ fun HomeListsContent(session: SesionUsuario, modifier: Modifier = Modifier,
             else -> destination = route
         }
     }
+    // Menú lateral (☰): se abre desde la barra superior o deslizando desde el borde izquierdo.
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
     BackHandler(destination != "home") { navigate("home") }
     BackHandler(selectedDetail != null) { selectedDetail = null }
+    BackHandler(drawerState.isOpen) { scope.launch { drawerState.close() } }
     val kind = CatalogKind.entries.firstOrNull { it.name == destination }
     val activity = destination in listOf("obligations", "tasks", "assignments")
+    // La barra y el menú solo se muestran en las secciones principales, no en formularios ni detalles.
+    val showMenu = selectedDetail == null && (destination == "home" || kind != null || activity || destination == "messaging")
+    val alerts = remember(state.obligations, state.tasks, state.projects) { state.summary("", "").listaAlertas }
     HomeModuleTheme {
-        Surface(modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            Column {
-                if (selectedDetail == null && (destination == "home" || kind != null || activity || destination == "messaging")) {
-                    val alerts = remember(state.obligations, state.tasks, state.projects) {
-                        state.summary("", "").listaAlertas
+        ModalNavigationDrawer(
+            drawerState = drawerState,
+            gesturesEnabled = showMenu && !saving,
+            drawerContent = {
+                MenuLateral(
+                    titulo = session.empresa.nombre,
+                    subtitulo = "${session.usuario.nombre} ${session.usuario.apellidos}",
+                    opciones = homeMenuOptions(avisos = alerts.size, avisosUrgentes = alerts.any { it.urgente }),
+                    rutaSeleccionada = destination,
+                    onElegir = { route -> navigate(route); scope.launch { drawerState.close() } }
+                )
+            }
+        ) {
+            Surface(modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                Column {
+                    if (showMenu) {
+                        BarraSuperior(
+                            titulo = homeMenuTitle(destination),
+                            onAbrirMenu = { scope.launch { drawerState.open() } },
+                            modifier = Modifier.testTag("module-menu")
+                        )
                     }
-                    val noticeCount = alerts.size
-                    val noticeUrgent = alerts.any { it.urgente }
-                    val menu = listOf("home" to "Inicio", "messaging" to "Mensajería") + CatalogKind.entries.filter { it != CatalogKind.MATERIALS }.map { it.name to it.title } +
-                        listOf("obligations" to if (noticeCount > 0) "Avisos · $noticeCount" else "Avisos", "tasks" to "Tareas", "assignments" to "Zonas laborales")
-                    LazyRow(modifier = Modifier.testTag("module-menu"), contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(menu, key = { it.first }) { (route, title) ->
-                            FilterChip(selected = route == destination, onClick = { navigate(route) }, label = { Text(title) }, enabled = !saving,
-                                colors = menuChipColors(urgente = route == "obligations" && noticeUrgent))
-                        }
-                    }
-                }
-                Box(Modifier.weight(1f)) {
-                    when {
-                        selectedDetail != null -> DetailScreen(
-                            content = remember(selectedDetail, state) { DetailViewModel(selectedDetail!!, state).content },
-                            onBack = { selectedDetail = null },
-                            onOpenRelated = { selectedDetail = it },
-                            actions = {
-                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    if (selectedDetail?.kind == CatalogKind.EMPLOYEES) {
-                                        Button(onClick = {
-                                            editingEmployeeId = selectedDetail!!.id
-                                            selectedDetail = null
-                                            destination = "employee-edit"
-                                        }) { Text("Editar empleado") }
-                                    } else {
-                                        Button(onClick = {
-                                            editingCatalogItem = selectedDetail
-                                            destination = "record-edit"
-                                            selectedDetail = null
-                                        }) { Text("Editar") }
-                                    }
-                                    OutlinedButton(onClick = { deletingItem = selectedDetail }) { Text("Eliminar") }
-                                    if (selectedDetail?.kind == CatalogKind.SUPPLIERS) {
-                                        Button(onClick = {
-                                            materialSupplierId = selectedDetail!!.id
-                                            selectedDetail = null
-                                            destination = "material-new"
-                                        }) { Text("Añadir material a este proveedor") }
+                    Box(Modifier.weight(1f)) {
+                        when {
+                            selectedDetail != null -> DetailScreen(
+                                content = remember(selectedDetail, state) { DetailViewModel(selectedDetail!!, state).content },
+                                onBack = { selectedDetail = null },
+                                onOpenRelated = { selectedDetail = it },
+                                actions = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        if (selectedDetail?.kind == CatalogKind.EMPLOYEES) {
+                                            Button(onClick = {
+                                                editingEmployeeId = selectedDetail!!.id
+                                                selectedDetail = null
+                                                destination = "employee-edit"
+                                            }) { Text("Editar empleado") }
+                                        } else {
+                                            Button(onClick = {
+                                                editingCatalogItem = selectedDetail
+                                                destination = "record-edit"
+                                                selectedDetail = null
+                                            }) { Text("Editar") }
+                                        }
+                                        OutlinedButton(onClick = { deletingItem = selectedDetail }) { Text("Eliminar") }
+                                        if (selectedDetail?.kind == CatalogKind.SUPPLIERS) {
+                                            Button(onClick = {
+                                                materialSupplierId = selectedDetail!!.id
+                                                selectedDetail = null
+                                                destination = "material-new"
+                                            }) { Text("Añadir material a este proveedor") }
+                                        }
                                     }
                                 }
-                            }
-                        )
-                        destination == "messaging" -> MessagingScreen(state) { navigate("home") }
-                        kind != null -> CatalogScreen(kind, state, workspace, { navigate("home") }, ::navigate,
-                            onSelect = { selection -> if (onOpenDetails != null) onOpenDetails(selection) else selectedDetail = selection },
-                            onEditEmployee = { employeeId -> editingEmployeeId = employeeId; destination = "employee-edit" })
-                        activity -> ModuleActivityScreen(destination, state, workspace, obligationKind, { navigate("home") }, ::navigate)
-                        destination in listOf("employee-new", "employee-edit", "project-new", "movement", "daily") ->
-                            HomeEntryForm(destination, workspace, state, onBack = { destination = if (destination == "employee-edit") "EMPLOYEES" else "home" },
-                                editingEmployee = if (destination == "employee-edit") state.employees.firstOrNull { it.id == editingEmployeeId } else null)
-                        destination == "record-edit" && editingCatalogItem != null -> EditCatalogItemScreen(
-                            editingCatalogItem!!, state, workspace,
-                            onBack = { selectedDetail = editingCatalogItem; destination = editingCatalogItem!!.kind.name }
-                        )
-                        destination in listOf("subcontractor-new", "supplier-new", "material-new", "assignment", "obligation-new", "task-new") ->
-                            ModuleRecordForm(destination, state, workspace, initialSupplierId = materialSupplierId) {
-                                if (destination == "material-new" && materialSupplierId != null) {
-                                    val supplierId = materialSupplierId!!
-                                    destination = "SUPPLIERS"
-                                    selectedDetail = CatalogSelection(CatalogKind.SUPPLIERS, supplierId)
-                                } else destination = "home"
-                            }
-                        else -> HomeScreen(stateOverride = state.summary(session.usuario.nombre, session.empresa.nombre),
-                            onEmpleadosClick = { navigate("EMPLOYEES") }, onObrasClick = { navigate("PROJECTS") },
-                            onAltaEmpleado = { navigate("employee-new") }, onNuevaObra = { navigate("project-new") },
-                            onMovimiento = { navigate("movement") }, onParteDiario = { navigate("daily") },
-                            onSectionClick = ::navigate, onRetry = workspace::retry,
-                            onAlertClick = { alert -> alert.destino?.let { navigate(it) } ?: run { notice = alert } })
+                            )
+                            destination == "messaging" -> MessagingScreen(state) { navigate("home") }
+                            kind != null -> CatalogScreen(kind, state, workspace, { navigate("home") }, ::navigate,
+                                onSelect = { selection -> if (onOpenDetails != null) onOpenDetails(selection) else selectedDetail = selection },
+                                onEditEmployee = { employeeId -> editingEmployeeId = employeeId; destination = "employee-edit" })
+                            activity -> ModuleActivityScreen(destination, state, workspace, obligationKind, { navigate("home") }, ::navigate)
+                            destination in listOf("employee-new", "employee-edit", "project-new", "movement", "daily") ->
+                                HomeEntryForm(destination, workspace, state, onBack = { destination = if (destination == "employee-edit") "EMPLOYEES" else "home" },
+                                    editingEmployee = if (destination == "employee-edit") state.employees.firstOrNull { it.id == editingEmployeeId } else null)
+                            destination == "record-edit" && editingCatalogItem != null -> EditCatalogItemScreen(
+                                editingCatalogItem!!, state, workspace,
+                                onBack = { selectedDetail = editingCatalogItem; destination = editingCatalogItem!!.kind.name }
+                            )
+                            destination in listOf("subcontractor-new", "supplier-new", "material-new", "assignment", "obligation-new", "task-new") ->
+                                ModuleRecordForm(destination, state, workspace, initialSupplierId = materialSupplierId) {
+                                    if (destination == "material-new" && materialSupplierId != null) {
+                                        val supplierId = materialSupplierId!!
+                                        destination = "SUPPLIERS"
+                                        selectedDetail = CatalogSelection(CatalogKind.SUPPLIERS, supplierId)
+                                    } else destination = "home"
+                                }
+                            else -> HomeScreen(stateOverride = state.summary(session.usuario.nombre, session.empresa.nombre),
+                                onEmpleadosClick = { navigate("EMPLOYEES") }, onObrasClick = { navigate("PROJECTS") },
+                                onAltaEmpleado = { navigate("employee-new") }, onNuevaObra = { navigate("project-new") },
+                                onMovimiento = { navigate("movement") }, onParteDiario = { navigate("daily") },
+                                onSectionClick = ::navigate, onRetry = workspace::retry,
+                                onAlertClick = { alert -> alert.destino?.let { navigate(it) } ?: run { notice = alert } })
+                        }
                     }
                 }
             }
@@ -178,25 +190,5 @@ fun HomeListsContent(session: SesionUsuario, modifier: Modifier = Modifier,
                 dismissButton = { TextButton(enabled = !saving, onClick = { deletingItem = null; workspace.saveError.value = null }) { Text("Cancelar") } }
             )
         }
-    }
-}
-
-/** Colores de los chips del menú superior, en versión clara y oscura. Los avisos urgentes se ven en rojo. */
-@Composable
-private fun menuChipColors(urgente: Boolean): SelectableChipColors {
-    val oscuro = LocalTemaOscuro.current
-    return when {
-        urgente && oscuro -> FilterChipDefaults.filterChipColors(
-            containerColor = Color(0xFF5C1F1A), labelColor = Color(0xFFFFB4AB),
-            selectedContainerColor = Color(0xFF7A2A22), selectedLabelColor = Color(0xFFFFDAD6))
-        urgente -> FilterChipDefaults.filterChipColors(
-            containerColor = Color(0xFFFFE2DE), labelColor = Color(0xFF9B1C12),
-            selectedContainerColor = Color(0xFFFFC9C2), selectedLabelColor = Color(0xFF7D160E))
-        oscuro -> FilterChipDefaults.filterChipColors(
-            containerColor = Color(0xFF2B2825), labelColor = Color(0xFFECE7E1),
-            selectedContainerColor = Color(0xFF4A4036), selectedLabelColor = Color(0xFFFFFFFF))
-        else -> FilterChipDefaults.filterChipColors(
-            containerColor = Color(0xFFF2EBDD), labelColor = Color(0xFF332D26),
-            selectedContainerColor = Color(0xFFE5D8C4), selectedLabelColor = Color(0xFF29231D))
     }
 }

@@ -41,8 +41,9 @@ class HomeModuleUiTest {
         val session = SesionUsuario(Usuario(1, "Ana", "Pérez", "prueba@example.test", 800004), Empresa(800004, "Empresa de pruebas", "Servicios"), Long.MAX_VALUE)
         compose.setContent { HomeListsContent(session = session, onOpenDetails = { selected.set(it) }) }
         listOf("Subcontratación" to "Electricidad Norte", "Proveedores" to "Suministros Sur", "Materiales" to "Cable azul").forEach { (menu, item) ->
-            compose.onNodeWithTag("module-menu").performScrollToNode(hasText(menu))
-            compose.onNodeWithText(menu).performClick()
+            // Abre el menú lateral (☰) y elige la sección.
+            compose.onNodeWithContentDescription("Abrir menú").performClick()
+            compose.onNode(hasText(menu) and hasAnyAncestor(hasTestTag("menu-lateral"))).performClick()
             compose.onNodeWithTag("catalog-list").performScrollToNode(hasText(item))
             compose.onNodeWithText(item).assertIsDisplayed()
         }
