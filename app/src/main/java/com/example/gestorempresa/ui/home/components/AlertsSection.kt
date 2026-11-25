@@ -15,7 +15,8 @@ import com.example.gestorempresa.ui.home.HomeAlert
 fun AlertsSection(
     alertas: List<HomeAlert>,
     modifier: Modifier = Modifier,
-    onAlertClick: (HomeAlert) -> Unit = {}
+    onAlertClick: (HomeAlert) -> Unit = {},
+    onOpenAll: () -> Unit = {}
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -32,11 +33,10 @@ fun AlertsSection(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            Text(
-                text = "${alertas.size} avisos",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.error
-            )
+            TextButton(onClick = onOpenAll) {
+                Text("🔔 ${alertas.size}", style = MaterialTheme.typography.labelMedium,
+                    color = if (alertas.any { it.urgente }) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+            }
         }
 
         if (alertas.isEmpty()) {

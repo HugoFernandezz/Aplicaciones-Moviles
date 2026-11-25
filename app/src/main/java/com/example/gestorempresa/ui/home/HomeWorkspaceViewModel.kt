@@ -35,25 +35,37 @@ data class HomeWorkspaceState(
         else -> "Registro"
     }
 
-    fun summary(name: String, company: String, today: LocalDate = LocalDate.now()): HomeUiState {
+    fun summary(name: String, company: String, today: LocalDate = LocalDate.now(), warnDays: Int = 15): HomeUiState {
         val monthly = movements.filter { it.date.startsWith(YearMonth.from(today).toString()) }
         val projectAlerts = projects.filter {
-            it.estado == "ACTIVO" && it.fechaFin != null && it.fechaFin <= today.plusDays(15).toString()
+            it.estado != "FINALIZADO" && it.fechaFin != null && validDate(it.fechaFin) && it.fechaFin <= today.plusDays(warnDays.toLong()).toString()
         }.map { project -> HomeAlert(0, project.titulo,
             if (project.fechaFin!! <= today.toString()) "Finalización prevista vencida: ${project.fechaFin}" else "Finalización prevista: ${project.fechaFin}",
             AlertType.GENERAL, project.fechaFin <= today.toString(), "PROJECTS", project.id) }
-        val due = obligations.filter { !it.resolved && (it.kind == "DOCUMENTO" || (it.dueDate != null && it.dueDate <= today.plusDays(30).toString())) }
+        val due = obligations.filter { obligation ->
+            !obligation.resolved && (obligation.kind == "DOCUMENTO" && obligation.dueDate.isNullOrBlank() ||
+                obligation.dueDate?.let { validDate(it) && it <= today.plusDays(warnDays.toLong()).toString() } == true)
+        }
         val obligationAlerts = due.map { record -> HomeAlert(0, record.title,
-            "${workerName(record.workerKind, record.workerId)} · ${record.dueDate?.let { if (it <= today.toString()) "Vencido: $it" else "Vence: $it" } ?: "Documentación pendiente"}",
+            "${record.kind} · ${workerName(record.workerKind, record.workerId)} · ${record.dueDate?.let { if (it <= today.toString()) "Vencido: $it" else "Vence: $it" } ?: "Documentación pendiente"}",
             AlertType.DOCUMENTACION, record.dueDate != null && record.dueDate <= today.toString(), "obligations", record.id) }
         // Contratos, certificados y otros documentos adjuntos con fecha de caducidad (funciones avanzadas).
-        val documentAlerts = attachments.filter { it.expiresAt != null && it.expiresAt <= today.plusDays(30).toString() }.map { file ->
+        val documentAlerts = attachments.filter { file ->
+            file.type == "DOCUMENTO" && file.expiresAt?.let { validDate(it) && it <= today.plusDays(warnDays.toLong()).toString() } == true &&
+                obligations.none { obligation ->
+                    !obligation.resolved && obligation.workerKind == file.ownerKind && obligation.workerId == file.ownerId &&
+                        obligation.title.normalizedSearch() == file.name.normalizedSearch() && obligation.dueDate == file.expiresAt
+                }
+        }.map { file ->
             HomeAlert(0, file.name, "${attachmentOwnerName(file)} · ${if (file.expiresAt!! <= today.toString()) "Caducado: ${file.expiresAt}" else "Caduca: ${file.expiresAt}"}",
                 AlertType.DOCUMENTACION, file.expiresAt <= today.toString(), "calendar", file.id) }
         val pending = tasks.filter { !it.completed }.sortedBy { it.dueDate }
-        val taskAlerts = pending.filter { it.dueDate <= today.toString() }.map { HomeAlert(0, it.title,
-            "Tarea pendiente: ${it.dueDate}", AlertType.GENERAL, true, "tasks", it.id) }
-        val warnings = (projectAlerts + obligationAlerts + documentAlerts + taskAlerts).sortedByDescending { it.urgente }.mapIndexed { i, alert -> alert.copy(id = i) }
+        val taskAlerts = pending.filter { validDate(it.dueDate) && it.dueDate <= today.plusDays(warnDays.toLong()).toString() }.map { task -> HomeAlert(0, task.title,
+            "Tarea pendiente: ${task.dueDate}", AlertType.GENERAL, task.dueDate <= today.toString(), "tasks", task.id) }
+        val warnings = (projectAlerts + obligationAlerts + documentAlerts + taskAlerts)
+            .distinctBy { "${it.destino}:${it.elementoId}" }
+            .sortedWith(compareByDescending<HomeAlert> { it.urgente }.thenBy { it.titulo.normalizedSearch() })
+            .mapIndexed { i, alert -> alert.copy(id = i) }
         return HomeUiState(nombreAdministrador = name, cargoAdministrador = company,
             empleados = employees.count { it.activo }, subcontratados = subcontractors.count { it.activo },
             totalObras = projects.size, serviciosActivos = projects.count { it.estado == "ACTIVO" }, obrasActivas = projects.count { it.estado == "ACTIVO" },

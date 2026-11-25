@@ -14,7 +14,8 @@ data class HomeMovement(
     val concept: String,
     val amountCents: Long,
     val income: Boolean,
-    val date: String
+    val date: String,
+    @ColumnInfo(defaultValue = "'OTRO'") val category: String = "OTRO"
 )
 
 @Dao
@@ -27,7 +28,7 @@ interface HomeDao {
     fun hours(): Flow<List<RegistroHorasEntity>>
     @Query("SELECT * FROM movimientos ORDER BY date DESC, id DESC")
     fun movements(): Flow<List<HomeMovement>>
-    @Insert suspend fun addEmployee(value: EmpleadoEntity)
+    @Insert suspend fun addEmployee(value: EmpleadoEntity): Long
     @Update suspend fun updateEmployee(value: EmpleadoEntity)
     @Insert suspend fun addProject(value: UnidadTrabajoEntity)
     @Update suspend fun updateProject(value: UnidadTrabajoEntity)
@@ -53,7 +54,9 @@ interface HomeDao {
     @Update suspend fun updateSupplier(value: ProveedorEntity)
     @Insert suspend fun addMaterial(value: MaterialEntity)
     @Update suspend fun updateMaterial(value: MaterialEntity)
-    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun setWorkerMeta(value: HomeWorkerMeta)
+    @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun setWorkerMeta(value: HomeWorkerMeta)
+    @Query("DELETE FROM home_worker_meta WHERE workerKind = :kind AND workerId = :workerId AND workZone = :zone")
+    suspend fun deleteWorkerZone(kind: String, workerId: Long, zone: String)
     @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun assign(value: HomeAssignment)
     @Query("DELETE FROM home_assignments WHERE workerKind = :kind AND workerId = :workerId AND projectId = :projectId")
     suspend fun unassign(kind: String, workerId: Long, projectId: Long)
@@ -141,7 +144,7 @@ interface HomeDao {
 @Database(entities = [EmpleadoEntity::class, UnidadTrabajoEntity::class,
     RegistroHorasEntity::class, HomeMovement::class, SubcontratadoEntity::class, ProveedorEntity::class,
     MaterialEntity::class, HomeWorkerMeta::class, HomeAssignment::class, HomeObligation::class,
-    HomeTask::class, HomeAttachment::class, ConsumoMaterialEntity::class], version = 4, exportSchema = true,
+    HomeTask::class, HomeAttachment::class, ConsumoMaterialEntity::class], version = 5, exportSchema = true,
     // 3 → 4 solo crea las tablas de adjuntos y de consumo de materiales (funciones avanzadas).
     autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 3, to = 4)])
 abstract class HomeDatabase : RoomDatabase() {
@@ -152,7 +155,7 @@ abstract class HomeDatabase : RoomDatabase() {
             require(companyId > 0)
             return instances.getOrPut(companyId) {
                 Room.databaseBuilder(context.applicationContext, HomeDatabase::class.java,
-                    "home_empresa_$companyId.db").addMigrations(HOME_MIGRATION_2_3).build()
+                    "home_empresa_$companyId.db").addMigrations(HOME_MIGRATION_2_3, HOME_MIGRATION_4_5).build()
             }
         }
     }
@@ -162,5 +165,15 @@ private val HOME_MIGRATION_2_3 = object : Migration(2, 3) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL("ALTER TABLE empleados ADD COLUMN numeroSeguridadSocial TEXT NOT NULL DEFAULT ''")
         db.execSQL("UPDATE empleados SET tipoEmpleado = 'COMPLETO' WHERE tipoEmpleado = 'FIJO'")
+    }
+}
+
+private val HOME_MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE movimientos ADD COLUMN category TEXT NOT NULL DEFAULT 'OTRO'")
+        db.execSQL("CREATE TABLE IF NOT EXISTS home_worker_meta_new (workerKind TEXT NOT NULL, workerId INTEGER NOT NULL, workZone TEXT NOT NULL, PRIMARY KEY(workerKind, workerId, workZone))")
+        db.execSQL("INSERT OR IGNORE INTO home_worker_meta_new(workerKind, workerId, workZone) SELECT workerKind, workerId, workZone FROM home_worker_meta")
+        db.execSQL("DROP TABLE home_worker_meta")
+        db.execSQL("ALTER TABLE home_worker_meta_new RENAME TO home_worker_meta")
     }
 }

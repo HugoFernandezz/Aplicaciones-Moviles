@@ -22,11 +22,7 @@ fun BalanceCard(
     val balance = ingresos - gastos
     val positivo = balance >= 0
 
-    val colorBalance = if (positivo) {
-        Color(0xFF34D399)
-    } else {
-        Color(0xFFFB7185)
-    }
+    val colorBalance = if (positivo) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.error
 
     val formatoEuro = NumberFormat.getCurrencyInstance(
         Locale.forLanguageTag("es-ES")
@@ -47,13 +43,13 @@ fun BalanceCard(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = "BALANCE OPERATIVO MES",
+                    text = "RESULTADO DEL MES",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
                 Text(
-                    text = if (positivo) "Positivo" else "Negativo",
+                    text = when { balance > 0 -> "Beneficio"; balance < 0 -> "Pérdida"; else -> "En equilibrio" },
                     style = MaterialTheme.typography.labelSmall,
                     color = colorBalance
                 )
@@ -79,8 +75,8 @@ fun BalanceCard(
                     )
 
                     Text(
-                        text = formatoEuro.format(ingresos),
-                        color = Color(0xFF34D399),
+                    text = formatoEuro.format(ingresos),
+                        color = MaterialTheme.colorScheme.secondary,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
@@ -94,7 +90,7 @@ fun BalanceCard(
 
                     Text(
                         text = formatoEuro.format(gastos),
-                        color = Color(0xFFFB7185),
+                        color = MaterialTheme.colorScheme.error,
                         fontWeight = FontWeight.SemiBold
                     )
                 }

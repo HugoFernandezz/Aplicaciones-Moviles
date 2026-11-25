@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Color
@@ -19,6 +20,8 @@ import com.example.gestorempresa.ui.home.components.KpiCard
 import com.example.gestorempresa.ui.home.components.BalanceCard
 import com.example.gestorempresa.ui.home.components.AlertsSection
 import com.example.gestorempresa.ui.home.components.QuickActions
+import com.example.gestorempresa.ui.advanced.dates.DueItem
+import java.time.LocalDate
 
 @Composable
 fun HomeScreen(
@@ -33,6 +36,8 @@ fun HomeScreen(
     onAlertClick: (HomeAlert) -> Unit = {},
     stateOverride: HomeUiState? = null,
     onSectionClick: (String) -> Unit = {},
+    onOpenAllAlerts: () -> Unit = {},
+    calendarItems: List<DueItem> = emptyList(),
     onRetry: () -> Unit = {}
 ) {
     val observedState = homeViewModel?.state?.collectAsStateWithLifecycle()?.value
@@ -54,6 +59,8 @@ fun HomeScreen(
                 color = MaterialTheme.colorScheme.onBackground
             )
         }
+
+        item { HomeCalendarPreview(calendarItems, onOpen = { onSectionClick("calendar") }) }
 
         if (uiState.isLoading) {
             item {
@@ -78,7 +85,7 @@ fun HomeScreen(
                         titulo = "Servicios activos",
                         valor = "${uiState.obrasActivas} / ${uiState.totalObras}",
                         descripcion = "En marcha",
-                        colorDescripcion = Color(0xFF34D399),
+                        colorDescripcion = MaterialTheme.colorScheme.secondary,
                         modifier = Modifier.weight(1f),
                         onClick = onObrasClick
                     )
@@ -116,8 +123,27 @@ fun HomeScreen(
             item {
                 AlertsSection(
                     alertas = uiState.listaAlertas,
-                    onAlertClick = onAlertClick
+                    onAlertClick = onAlertClick,
+                    onOpenAll = onOpenAllAlerts
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeCalendarPreview(items: List<DueItem>, onOpen: () -> Unit) {
+    val today = LocalDate.now()
+    val next = remember(items, today) { items.filter { !it.done && !it.date.isBefore(today) }.take(3) }
+    Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Agenda próxima", style = MaterialTheme.typography.titleMedium)
+                TextButton(onClick = onOpen) { Text("Abrir calendario") }
+            }
+            if (next.isEmpty()) Text("No hay fechas próximas registradas.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            else next.forEach { item ->
+                Text("${item.date} · ${item.kind.label}: ${item.title}", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }

@@ -17,6 +17,7 @@ import com.example.gestorempresa.data.media.AttachmentStorage
 import com.example.gestorempresa.ui.advanced.AdvancedDetailFooter
 import com.example.gestorempresa.ui.advanced.AdvancedDetailHeader
 import com.example.gestorempresa.ui.advanced.dates.CalendarScreen
+import com.example.gestorempresa.ui.advanced.dates.dueItems
 import com.example.gestorempresa.ui.advanced.documents.AttachmentViewerScreen
 import com.example.gestorempresa.ui.advanced.filesOwnedBy
 import com.example.gestorempresa.ui.advanced.map.LocationPickerScreen
@@ -32,7 +33,7 @@ import kotlinx.coroutines.launch
 /** El miembro 3 recibe tipo e id mediante onOpenDetails, sin duplicar sus pantallas. */
 @Composable
 fun HomeListsContent(session: SesionUsuario, modifier: Modifier = Modifier,
-    onOpenDetails: ((CatalogSelection) -> Unit)? = null, warnDays: Int = 15, onNotifyNow: () -> Unit = {}) {
+    onOpenDetails: ((CatalogSelection) -> Unit)? = null, warnDays: Int = 15, resetHomeSignal: Int = 0, onNotifyNow: () -> Unit = {}) {
     val context = LocalContext.current.applicationContext
     val companyId = session.empresa.id
     val owner = remember(companyId, session.usuario.id) {
@@ -54,8 +55,10 @@ fun HomeListsContent(session: SesionUsuario, modifier: Modifier = Modifier,
     val workspace: HomeViewModel = viewModel(viewModelStoreOwner = owner, factory = factory)
     val state by workspace.state.collectAsStateWithLifecycle()
     var destination by rememberSaveable(companyId) { mutableStateOf("home") }
+    val previousDestinations = rememberSaveable(companyId) { mutableStateListOf<String>() }
     var obligationKind by rememberSaveable(companyId) { mutableStateOf("Todos") }
     var editingEmployeeId by rememberSaveable(companyId) { mutableStateOf<Long?>(null) }
+    var editingFromDetailId by rememberSaveable(companyId) { mutableStateOf<Long?>(null) }
     var editingCatalogItem by remember(companyId) { mutableStateOf<CatalogSelection?>(null) }
     var materialSupplierId by rememberSaveable(companyId) { mutableStateOf<Long?>(null) }
     var selectedDetail by remember(companyId) { mutableStateOf<CatalogSelection?>(null) }
@@ -70,18 +73,44 @@ fun HomeListsContent(session: SesionUsuario, modifier: Modifier = Modifier,
     fun navigate(route: String) {
         if (saving) return
         workspace.saveError.value = null
-        when (route) {
-            "MEDICO", "CURSO", "DOCUMENTO" -> { obligationKind = route; destination = "obligations" }
-            "obligations" -> { obligationKind = "Todos"; destination = route }
-            "pending-projects" -> { workspace.filter(CatalogKind.PROJECTS, CatalogFilters(status = "PENDIENTE")); destination = "PROJECTS" }
-            else -> destination = route
+        val target = when (route) {
+            "MEDICO", "CURSO", "DOCUMENTO" -> { obligationKind = route; "obligations" }
+            "obligations" -> { obligationKind = "Todos"; route }
+            "pending-projects" -> { workspace.filter(CatalogKind.PROJECTS, CatalogFilters(status = "PENDIENTE")); "PROJECTS" }
+            else -> route
         }
+        if (target == "home") {
+            destination = "home"
+            selectedDetail = null
+            previousDestinations.clear()
+        } else if (target != destination) {
+            previousDestinations.add(destination)
+            selectedDetail = null
+            destination = target
+        }
+    }
+    fun goBack() {
+        if (viewingAttachmentId != null) { viewingAttachmentId = null; return }
+        if (pickingLocationId != null) { pickingLocationId = null; return }
+        if (selectedDetail != null) { selectedDetail = null; return }
+        if (destination == "employee-edit" && editingFromDetailId != null) {
+            selectedDetail = CatalogSelection(CatalogKind.EMPLOYEES, editingFromDetailId!!)
+            editingFromDetailId = null
+            destination = CatalogKind.EMPLOYEES.name
+            return
+        }
+        if (destination == "record-edit" && editingCatalogItem != null) {
+            selectedDetail = editingCatalogItem
+            destination = editingCatalogItem!!.kind.name
+            return
+        }
+        selectedDetail = null
+        destination = if (previousDestinations.isNotEmpty()) previousDestinations.removeAt(previousDestinations.lastIndex) else "home"
     }
     // Menú lateral (☰): se abre desde la barra superior o deslizando desde el borde izquierdo.
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
-    BackHandler(destination != "home") { navigate("home") }
-    BackHandler(selectedDetail != null) { selectedDetail = null }
+    BackHandler(destination != "home" || selectedDetail != null) { goBack() }
     BackHandler(drawerState.isOpen) { scope.launch { drawerState.close() } }
     BackHandler(pickingLocationId != null) { pickingLocationId = null }
     BackHandler(viewingAttachmentId != null) { viewingAttachmentId = null }
@@ -91,7 +120,15 @@ fun HomeListsContent(session: SesionUsuario, modifier: Modifier = Modifier,
     val overlay = viewingAttachmentId != null || pickingLocationId != null
     val showMenu = !overlay && selectedDetail == null && (destination == "home" || kind != null || activity ||
         destination in listOf("messaging", "map", "stats", "calendar"))
-    val alerts = remember(state.obligations, state.tasks, state.projects) { state.summary("", "").listaAlertas }
+    LaunchedEffect(resetHomeSignal) {
+        if (resetHomeSignal > 0) {
+            destination = "home"
+            selectedDetail = null
+            previousDestinations.clear()
+            editingFromDetailId = null
+        }
+    }
+    val alerts = remember(state, warnDays) { state.summary("", "", warnDays = warnDays).listaAlertas }
     HomeModuleTheme {
         ModalNavigationDrawer(
             drawerState = drawerState,
@@ -130,14 +167,14 @@ fun HomeListsContent(session: SesionUsuario, modifier: Modifier = Modifier,
                             }
                             selectedDetail != null -> DetailScreen(
                                 content = remember(selectedDetail, state) { DetailViewModel(selectedDetail!!, state).content },
-                                onBack = { selectedDetail = null },
+                                onBack = { goBack() },
                                 onOpenRelated = { selectedDetail = it },
                                 listState = detailListState,
                                 header = { AdvancedDetailHeader(selectedDetail!!, state, workspace, storage) },
                                 footer = {
                                     AdvancedDetailFooter(selectedDetail!!, state, workspace, storage, session.empresa.nombre,
                                         onOpenAttachment = { viewingAttachmentId = it.id },
-                                        onOpenMap = { selectedDetail = null; destination = "map" },
+                                        onOpenMap = { selectedDetail = null; navigate("map") },
                                         onPickLocation = { pickingLocationId = it })
                                 },
                                 actions = {
@@ -145,6 +182,7 @@ fun HomeListsContent(session: SesionUsuario, modifier: Modifier = Modifier,
                                         if (selectedDetail?.kind == CatalogKind.EMPLOYEES) {
                                             Button(onClick = {
                                                 editingEmployeeId = selectedDetail!!.id
+                                                editingFromDetailId = selectedDetail!!.id
                                                 selectedDetail = null
                                                 destination = "employee-edit"
                                             }) { Text("Editar empleado") }
@@ -160,7 +198,7 @@ fun HomeListsContent(session: SesionUsuario, modifier: Modifier = Modifier,
                                             Button(onClick = {
                                                 materialSupplierId = selectedDetail!!.id
                                                 selectedDetail = null
-                                                destination = "material-new"
+                                                navigate("material-new")
                                             }) { Text("Añadir material a este proveedor") }
                                         }
                                     }
@@ -174,14 +212,15 @@ fun HomeListsContent(session: SesionUsuario, modifier: Modifier = Modifier,
                             destination == "calendar" -> CalendarScreen(state, warnDays, onOpen = { selectedDetail = it }, onNotifyNow = onNotifyNow)
                             kind != null -> CatalogScreen(kind, state, workspace, { navigate("home") }, ::navigate,
                                 onSelect = { selection -> if (onOpenDetails != null) onOpenDetails(selection) else selectedDetail = selection },
-                                onEditEmployee = { employeeId -> editingEmployeeId = employeeId; destination = "employee-edit" })
-                            activity -> ModuleActivityScreen(destination, state, workspace, obligationKind, { navigate("home") }, ::navigate)
+                                onEditEmployee = { employeeId -> editingEmployeeId = employeeId; editingFromDetailId = null; navigate("employee-edit") })
+                            activity -> ModuleActivityScreen(destination, state, workspace, obligationKind, { goBack() }, ::navigate, warnDays = warnDays)
                             destination in listOf("employee-new", "employee-edit", "project-new", "movement", "daily") ->
-                                HomeEntryForm(destination, workspace, state, onBack = { destination = if (destination == "employee-edit") "EMPLOYEES" else "home" },
-                                    editingEmployee = if (destination == "employee-edit") state.employees.firstOrNull { it.id == editingEmployeeId } else null)
+                                HomeEntryForm(destination, workspace, state, onBack = { goBack() },
+                                    editingEmployee = if (destination == "employee-edit") state.employees.firstOrNull { it.id == editingEmployeeId } else null,
+                                    storage = storage)
                             destination == "record-edit" && editingCatalogItem != null -> EditCatalogItemScreen(
                                 editingCatalogItem!!, state, workspace,
-                                onBack = { selectedDetail = editingCatalogItem; destination = editingCatalogItem!!.kind.name }
+                                onBack = { goBack() }
                             )
                             destination in listOf("subcontractor-new", "supplier-new", "material-new", "assignment", "obligation-new", "task-new") ->
                                 ModuleRecordForm(destination, state, workspace, initialSupplierId = materialSupplierId) {
@@ -189,13 +228,14 @@ fun HomeListsContent(session: SesionUsuario, modifier: Modifier = Modifier,
                                         val supplierId = materialSupplierId!!
                                         destination = "SUPPLIERS"
                                         selectedDetail = CatalogSelection(CatalogKind.SUPPLIERS, supplierId)
-                                    } else destination = "home"
+                                    } else goBack()
                                 }
-                            else -> HomeScreen(stateOverride = state.summary(session.usuario.nombre, session.empresa.nombre),
+                            else -> HomeScreen(stateOverride = state.summary(session.usuario.nombre, session.empresa.nombre, warnDays = warnDays),
+                                calendarItems = state.dueItems(),
                                 onEmpleadosClick = { navigate("EMPLOYEES") }, onObrasClick = { navigate("PROJECTS") },
                                 onAltaEmpleado = { navigate("employee-new") }, onNuevaObra = { navigate("project-new") },
                                 onMovimiento = { navigate("movement") }, onParteDiario = { navigate("daily") },
-                                onSectionClick = ::navigate, onRetry = workspace::retry,
+                                onSectionClick = ::navigate, onRetry = workspace::retry, onOpenAllAlerts = { navigate("obligations") },
                                 onAlertClick = { alert -> alert.destino?.let { navigate(it) } ?: run { notice = alert } })
                         }
                     }

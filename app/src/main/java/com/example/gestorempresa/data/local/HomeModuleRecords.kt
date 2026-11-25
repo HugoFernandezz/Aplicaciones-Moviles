@@ -5,7 +5,7 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /** workerKind: EMPLEADO o SUBCONTRATADO. La zona laboral nunca se deduce de la residencia. */
-@Entity(tableName = "home_worker_meta", primaryKeys = ["workerKind", "workerId"])
+@Entity(tableName = "home_worker_meta", primaryKeys = ["workerKind", "workerId", "workZone"])
 data class HomeWorkerMeta(val workerKind: String, val workerId: Long, val workZone: String)
 
 @Entity(tableName = "home_assignments", primaryKeys = ["workerKind", "workerId", "projectId"])

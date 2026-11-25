@@ -15,7 +15,7 @@ import java.time.LocalDate
 
 @Composable
 fun ModuleActivityScreen(route: String, state: HomeWorkspaceState, vm: HomeWorkspaceViewModel,
-    initialKind: String = "Todos", onBack: () -> Unit, onNavigate: (String) -> Unit) {
+    initialKind: String = "Todos", onBack: () -> Unit, onNavigate: (String) -> Unit, warnDays: Int = 15) {
     var query by rememberSaveable(route, initialKind) { mutableStateOf("") }
     var showArchived by rememberSaveable(route, initialKind) { mutableStateOf(false) }
     var kind by rememberSaveable(route, initialKind) { mutableStateOf(initialKind) }
@@ -29,8 +29,8 @@ fun ModuleActivityScreen(route: String, state: HomeWorkspaceState, vm: HomeWorks
         item { Text(title, style = MaterialTheme.typography.headlineMedium) }
         item { Button(onClick = { onNavigate(when (route) { "tasks" -> "task-new"; "assignments" -> "assignment"; else -> "obligation-new" }) }) { Text("+ Añadir") } }
         item { OutlinedTextField(query, { query = it }, label = { Text("Buscar") }, modifier = Modifier.fillMaxWidth()) }
-        if (route != "assignments") item { FilterChip(showArchived, { showArchived = !showArchived }, label = { Text(if (showArchived) "Mostrar también atendidos" else "Solo pendientes") }) }
-        if (route == "obligations") item { ChoiceField("Tipo", kind, listOf("Todos", "MEDICO", "CURSO", "DOCUMENTO"), true) { kind = it } }
+        if (route == "obligations") item { ChoiceField("Avisos", kind, listOf("Todos", "VENCIDOS", "PROXIMOS", "MEDICO", "CURSO", "DOCUMENTO", "SERVICIO", "TAREA"), true) { kind = it } }
+        else if (route != "assignments") item { FilterChip(showArchived, { showArchived = !showArchived }, label = { Text(if (showArchived) "Mostrar también atendidos" else "Solo pendientes") }) }
         error?.let { item { Text(it, color = MaterialTheme.colorScheme.error) } }
         if (state.loading) item { CircularProgressIndicator() }
         else if (state.error != null) item { Text(state.error, color = MaterialTheme.colorScheme.error); Button(onClick = vm::retry) { Text("Reintentar") } }
@@ -50,8 +50,10 @@ fun ModuleActivityScreen(route: String, state: HomeWorkspaceState, vm: HomeWorks
                 item { Text("Zona laboral: dónde suele trabajar la persona. Asignación: servicio o proyecto concreto al que se incorpora.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 val zones = state.workerMeta.filter { matches("${state.workerName(it.workerKind, it.workerId)} ${it.workZone}") }
                 if (zones.isNotEmpty()) item { Text("ZONAS HABITUALES", style = MaterialTheme.typography.labelLarge) }
-                items(zones, key = { "zone-${it.workerKind}-${it.workerId}" }) { meta ->
-                    ActivityCard(state.workerName(meta.workerKind, meta.workerId), meta.workZone, "Zona habitual", false) { }
+                items(zones, key = { "zone-${it.workerKind}-${it.workerId}-${it.workZone}" }) { meta ->
+                    ActivityCard(state.workerName(meta.workerKind, meta.workerId), meta.workZone, "Zona habitual", false) {
+                        TextButton(enabled = !saving, onClick = { vm.save({ deleteWorkerZone(meta.workerKind, meta.workerId, meta.workZone) }, {}) }) { Text("Quitar zona") }
+                    }
                 }
                 val assignments = state.assignments.filter { a -> matches("${state.workerName(a.workerKind, a.workerId)} ${state.projects.firstOrNull { it.id == a.projectId }?.titulo.orEmpty()}") }
                 if (assignments.isNotEmpty()) item { Text("PROYECTOS ASIGNADOS", style = MaterialTheme.typography.labelLarge) }
@@ -63,15 +65,27 @@ fun ModuleActivityScreen(route: String, state: HomeWorkspaceState, vm: HomeWorks
                 }
             }
             else -> {
-                val obligations = state.obligations.filter { (showArchived || !it.resolved) && (kind == "Todos" || it.kind == kind) && matches("${it.title} ${state.workerName(it.workerKind, it.workerId)} ${it.dueDate.orEmpty()}") }
-                    .sortedWith(compareBy({ it.resolved }, { it.dueDate ?: "9999-12-31" }))
-                if (obligations.isEmpty()) item { EmptyCatalog("No hay documentos o vencimientos que coincidan con los filtros.") }
-                items(obligations, key = { it.id }) { record ->
-                    val urgent = !record.resolved && record.dueDate != null && record.dueDate <= today
-                    val soon = record.dueDate != null && record.dueDate <= LocalDate.now().plusDays(30).toString()
-                    val label = when { record.resolved -> "Atendido"; urgent -> "Vencido / urgente"; record.kind == "DOCUMENTO" -> "Documentación pendiente"; soon -> "Próximo a caducar"; else -> "Vigente" }
-                    ActivityCard(record.title, "${state.workerName(record.workerKind, record.workerId)} · ${record.kind} · ${record.dueDate ?: "Sin fecha límite"}", label, urgent) {
-                        TextButton(enabled = !saving, onClick = { vm.save({ setObligationResolved(record.id, !record.resolved) }, {}) }) { Text(if (record.resolved) "Reabrir aviso" else "Marcar atendido") }
+                val alerts = state.summary("", "", warnDays = warnDays).listaAlertas.filter { alert ->
+                    val categoryMatches = when (kind) {
+                        "VENCIDOS" -> alert.urgente
+                        "PROXIMOS" -> !alert.urgente
+                        "MEDICO", "CURSO" -> alert.destino == "obligations" && alert.descripcion.startsWith(kind)
+                        "DOCUMENTO" -> alert.destino == "calendar" || (alert.destino == "obligations" && alert.descripcion.startsWith("DOCUMENTO"))
+                        "SERVICIO" -> alert.destino == "PROJECTS"
+                        "TAREA" -> alert.destino == "tasks"
+                        else -> true
+                    }
+                    categoryMatches && matches("${alert.titulo} ${alert.descripcion}")
+                }
+                if (alerts.isEmpty()) item { EmptyCatalog("No hay avisos pendientes ni vencimientos próximos que coincidan con los filtros.") }
+                items(alerts, key = { it.id }) { alert ->
+                    ActivityCard(alert.titulo, alert.descripcion,
+                        if (alert.urgente) "Vencido / urgente" else "Próximo o pendiente", alert.urgente) {
+                        when (alert.destino) {
+                            "obligations" -> alert.elementoId?.let { id -> TextButton(enabled = !saving, onClick = { vm.save({ setObligationResolved(id, true) }, {}) }) { Text("Marcar atendido") } }
+                            "tasks" -> alert.elementoId?.let { id -> TextButton(enabled = !saving, onClick = { vm.save({ setTaskCompleted(id, true) }, {}) }) { Text("Marcar completada") } }
+                            else -> TextButton(onClick = { onNavigate(alert.destino ?: "calendar") }) { Text("Ver registro") }
+                        }
                     }
                 }
             }
