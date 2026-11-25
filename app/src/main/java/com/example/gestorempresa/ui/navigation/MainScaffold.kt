@@ -30,6 +30,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
@@ -64,6 +65,7 @@ fun MainScaffold(
     settingsViewModel: SettingsViewModel
 ) {
     var seccion by rememberSaveable { mutableStateOf(SeccionPrincipal.INICIO) }
+    var homeResetSignal by rememberSaveable { mutableIntStateOf(0) }
     val context = LocalContext.current
     val ajustes by settingsViewModel.ui.collectAsStateWithLifecycle()
     val preferencias = ajustes.ajustes
@@ -99,7 +101,12 @@ fun MainScaffold(
                     val seleccionada = seccion == opcion
                     NavigationBarItem(
                         selected = seleccionada,
-                        onClick = { seccion = opcion },
+                        onClick = {
+                            if (opcion == SeccionPrincipal.INICIO) {
+                                homeResetSignal++
+                                seccion = SeccionPrincipal.INICIO
+                            } else seccion = opcion
+                        },
                         // contentDescription = null porque el texto de debajo ya describe el icono.
                         icon = { Icon(if (seleccionada) opcion.iconoSeleccionado else opcion.icono, contentDescription = null) },
                         label = { Text(opcion.titulo) }
@@ -112,7 +119,7 @@ fun MainScaffold(
         Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).imePadding()) {
             estadoSecciones.SaveableStateProvider(seccion.name) {
                 when (seccion) {
-                    SeccionPrincipal.INICIO -> HomeListsContent(session = sesion, warnDays = preferencias.diasAntelacion,
+                    SeccionPrincipal.INICIO -> HomeListsContent(session = sesion, warnDays = preferencias.diasAntelacion, resetHomeSignal = homeResetSignal,
                         onNotifyNow = {
                             DueDateNotifications.runNow(context, empresaId, preferencias.diasAntelacion, true, preferencias.avisosTareas)
                             val mensaje = if (DueDateNotifications.canNotify(context)) "Revisando vencimientos…" else "Activa las notificaciones de la app para recibir avisos"

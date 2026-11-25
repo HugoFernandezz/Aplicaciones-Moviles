@@ -1,16 +1,28 @@
 package com.example.gestorempresa.ui.home
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import com.example.gestorempresa.ui.advanced.media.decodeImage
 
 @Composable
 fun CatalogScreen(kind: CatalogKind, state: HomeWorkspaceState, vm: HomeWorkspaceViewModel,
@@ -23,7 +35,7 @@ fun CatalogScreen(kind: CatalogKind, state: HomeWorkspaceState, vm: HomeWorkspac
     val saveError by vm.saveError.collectAsStateWithLifecycle()
     val worker = kind == CatalogKind.EMPLOYEES || kind == CatalogKind.SUBCONTRACTORS
     var showFilters by rememberSaveable(kind) { mutableStateOf(false) }
-    val activeFilterCount = listOf(filter.trade, filter.type, filter.status, filter.zone, filter.fromDate, filter.toDate)
+    val activeFilterCount = listOf(filter.query, filter.trade, filter.type, filter.status, filter.zone, filter.fromDate, filter.toDate)
         .count { it.isNotBlank() } + (if (filter.projectId != null) 1 else 0) + (if (filter.supplierId != null) 1 else 0)
     val datesInvalid = (filter.fromDate.isNotEmpty() && !validDate(filter.fromDate)) ||
         (filter.toDate.isNotEmpty() && !validDate(filter.toDate)) ||
@@ -43,6 +55,19 @@ fun CatalogScreen(kind: CatalogKind, state: HomeWorkspaceState, vm: HomeWorkspac
                 if (filter != CatalogFilters()) TextButton(onClick = { update(CatalogFilters()) }) { Text("Limpiar") }
             }
         }
+        if (filter != CatalogFilters()) item {
+            Row(Modifier.fillMaxWidth().horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (filter.query.isNotBlank()) ActiveFilter("Buscar: ${filter.query}") { update(filter.copy(query = "")) }
+                if (filter.trade.isNotBlank()) ActiveFilter("Oficio: ${filter.trade}") { update(filter.copy(trade = "")) }
+                if (filter.type.isNotBlank()) ActiveFilter("Tipo: ${filter.type}") { update(filter.copy(type = "")) }
+                if (filter.status.isNotBlank()) ActiveFilter("Estado: ${filter.status}") { update(filter.copy(status = "")) }
+                if (filter.zone.isNotBlank()) ActiveFilter("Zona: ${filter.zone}") { update(filter.copy(zone = "")) }
+                filter.projectId?.let { id -> ActiveFilter("Proyecto: ${state.projects.firstOrNull { it.id == id }?.titulo.orEmpty()}") { update(filter.copy(projectId = null)) } }
+                filter.supplierId?.let { id -> ActiveFilter("Proveedor: ${state.suppliers.firstOrNull { it.id == id }?.nombreEmpresa.orEmpty()}") { update(filter.copy(supplierId = null)) } }
+                if (filter.fromDate.isNotBlank()) ActiveFilter("Desde: ${filter.fromDate}") { update(filter.copy(fromDate = "")) }
+                if (filter.toDate.isNotBlank()) ActiveFilter("Hasta: ${filter.toDate}") { update(filter.copy(toDate = "")) }
+            }
+        }
         if (showFilters) {
             if (worker) item { FilterChoice("Oficio", filter.trade, rows.map { it.trade }) { update(filter.copy(trade = it)) } }
             if (kind != CatalogKind.SUPPLIERS && kind != CatalogKind.SUBCONTRACTORS) item {
@@ -55,8 +80,8 @@ fun CatalogScreen(kind: CatalogKind, state: HomeWorkspaceState, vm: HomeWorkspac
             if (worker) item { IdFilter("Servicio / proyecto", filter.projectId, state.projects.map { it.id to it.titulo }) { update(filter.copy(projectId = it)) } }
             if (kind == CatalogKind.MATERIALS) item { IdFilter("Proveedor", filter.supplierId, state.suppliers.map { it.id to it.nombreEmpresa }) { update(filter.copy(supplierId = it)) } }
             if (kind == CatalogKind.PROJECTS) {
-                item { EntryField("Inicio desde (AAAA-MM-DD)", filter.fromDate, { update(filter.copy(fromDate = it)) }, true) }
-                item { EntryField("Inicio hasta (AAAA-MM-DD)", filter.toDate, { update(filter.copy(toDate = it)) }, true) }
+                item { DateEntryField("Inicio desde (AAAA-MM-DD)", filter.fromDate, { update(filter.copy(fromDate = it)) }, true, datesInvalid) }
+                item { DateEntryField("Inicio hasta (AAAA-MM-DD)", filter.toDate, { update(filter.copy(toDate = it)) }, true, datesInvalid) }
                 if (datesInvalid) item { Text("Revisa las fechas y el orden del intervalo.", color = MaterialTheme.colorScheme.error) }
             }
         }
@@ -70,9 +95,14 @@ fun CatalogScreen(kind: CatalogKind, state: HomeWorkspaceState, vm: HomeWorkspac
             else -> items(visible, key = { it.id }) { row ->
                 Card(onClick = { onSelect(CatalogSelection(kind, row.id)) }, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(row.title, style = MaterialTheme.typography.titleMedium)
-                        Text(row.subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        if (row.status.isNotBlank()) Text(row.status, color = if (row.status == "ACTIVO") MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant)
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            if (kind == CatalogKind.EMPLOYEES || kind == CatalogKind.SUBCONTRACTORS || kind == CatalogKind.PROJECTS) CatalogPicture(row, kind == CatalogKind.PROJECTS)
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                Text(row.title, style = MaterialTheme.typography.titleMedium)
+                                Text(row.subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                if (row.status.isNotBlank()) Text(row.status, color = if (row.status == "ACTIVO") MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
                         if (worker) {
                             Text("Zona laboral: ${row.zone.ifBlank { "Sin indicar" }}")
                             Text("Asignado: ${state.projects.filter { it.id in row.projectIds }.joinToString { it.titulo }.ifBlank { "Sin asignación" }}")
@@ -83,6 +113,9 @@ fun CatalogScreen(kind: CatalogKind, state: HomeWorkspaceState, vm: HomeWorkspac
                         if (kind == CatalogKind.EMPLOYEES) TextButton(onClick = { onEditEmployee(row.id) }) { Text("Editar empleado") }
                         if (kind == CatalogKind.PROJECTS) {
                             Text("${row.startDate} → ${row.endDate ?: "Sin fin previsto"}")
+                            val assignedPeople = state.assignments.filter { it.projectId == row.id }
+                                .map { state.workerName(it.workerKind, it.workerId) }.distinct()
+                            Text("Personal asignado: ${assignedPeople.joinToString().ifBlank { "Sin asignaciones" }}")
                             ChoiceField("Cambiar estado", row.status, listOf("ACTIVO", "PAUSADO", "FINALIZADO"), !saving) {
                                 status -> vm.save({ setProjectStatus(row.id, status) }, {})
                             }
@@ -90,6 +123,31 @@ fun CatalogScreen(kind: CatalogKind, state: HomeWorkspaceState, vm: HomeWorkspac
                         TextButton(onClick = { onSelect(CatalogSelection(kind, row.id)) }) { Text("Abrir ficha") }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ActiveFilter(label: String, onRemove: () -> Unit) {
+    FilterChip(selected = true, onClick = onRemove, label = { Text("$label  ×") })
+}
+
+@Composable
+private fun CatalogPicture(row: CatalogRow, project: Boolean) {
+    var retryKey by remember(row.id, row.photoPath) { mutableIntStateOf(0) }
+    val result by produceState<Pair<Boolean, ImageBitmap?>>(initialValue = (row.photoPath == null) to null, row.photoPath, retryKey) {
+        value = if (row.photoPath == null) true to null else withContext(Dispatchers.IO) { true to decodeImage(row.photoPath, 256) }
+    }
+    Surface(shape = if (project) RoundedCornerShape(12.dp) else CircleShape,
+        color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(60.dp)) {
+        Box(contentAlignment = Alignment.Center) {
+            val bitmap = result.second
+            if (bitmap != null) Image(bitmap, row.title, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            else Text(row.title.split(" ").take(2).mapNotNull { it.firstOrNull() }.joinToString("").uppercase(),
+                color = MaterialTheme.colorScheme.onPrimaryContainer)
+            if (project && row.photoPath != null && result.first && result.second == null) {
+                TextButton(onClick = { retryKey++ }) { Text("↻") }
             }
         }
     }

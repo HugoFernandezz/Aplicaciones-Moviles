@@ -27,6 +27,8 @@ import java.time.LocalDate
         var workerKind by rememberSaveable { mutableStateOf("EMPLEADO") }
         var recordKind by rememberSaveable { mutableStateOf("MEDICO") }
         var workerId by rememberSaveable { mutableStateOf<Long?>(null) }
+        var selectedWorkerIds by rememberSaveable { mutableStateOf(emptySet<Long>()) }
+        var workerSearch by rememberSaveable { mutableStateOf("") }
         var projectId by rememberSaveable { mutableStateOf<Long?>(null) }
         var supplierId by rememberSaveable { mutableStateOf(initialSupplierId) }
         var date by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
@@ -61,16 +63,37 @@ import java.time.LocalDate
                     else Text("Proveedor: ${state.suppliers.firstOrNull { it.id == initialSupplierId }?.nombreEmpresa.orEmpty()}")
                     if (state.suppliers.isEmpty()) Text("Primero añade un proveedor desde su listado.")
                     EntryField("Unidad de medida *", unit, { unit = it }, !saving)
+                    val previousUnits = state.materials.map { it.unidadMedida.trim() }.filter(String::isNotBlank).distinctBy { it.normalizedSearch() }
+                    if (previousUnits.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        previousUnits.take(8).forEach { option ->
+                            AssistChip(onClick = { unit = option }, label = { Text(option) }, enabled = !saving)
+                        }
+                    }
                     EntryField("Precio unitario en euros *", amount, { amount = it }, !saving)
                 }
                 "assignment", "obligation-new" -> {
-                    ChoiceField("Tipo de trabajador", workerKind, listOf("EMPLEADO", "SUBCONTRATADO"), !saving) { workerKind = it; workerId = null }
-                    SelectionField("Trabajador *", workerId, workers, !saving) { workerId = it }
+                    ChoiceField("Tipo de trabajador", workerKind, listOf("EMPLEADO", "SUBCONTRATADO"), !saving) {
+                        workerKind = it; workerId = null; selectedWorkerIds = emptySet()
+                    }
+                    if (route == "assignment") {
+                        EntryField("Buscar trabajadores", workerSearch, { workerSearch = it }, !saving)
+                        workers.filter { workerSearch.isBlank() || it.second.normalizedSearch().contains(workerSearch.normalizedSearch()) }
+                            .take(30).forEach { (id, name) ->
+                                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Checkbox(checked = id in selectedWorkerIds, enabled = !saving, onCheckedChange = { checked ->
+                                        selectedWorkerIds = if (checked) selectedWorkerIds + id else selectedWorkerIds - id
+                                    })
+                                    Text(name)
+                                }
+                            }
+                        Text("Seleccionados: ${selectedWorkerIds.size}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else SelectionField("Trabajador *", workerId, workers, !saving) { workerId = it }
                     if (workers.isEmpty()) Text("Primero añade un trabajador activo del tipo seleccionado.")
                     if (route == "assignment") {
-                        Text("Indica dónde suele trabajar esta persona y, si corresponde, el proyecto al que está asignada.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        EntryField("Zona habitual de trabajo *", zone, { zone = it }, !saving)
-                        Text("Se guarda como zona laboral, independiente de la residencia.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Añade zonas habituales sin sustituir las anteriores. También puedes asignar varias personas al mismo servicio.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        val existingZones = state.workerMeta.filter { it.workerId in selectedWorkerIds && it.workerKind == workerKind }.map { it.workZone }.distinct()
+                        if (existingZones.isNotEmpty()) Text("Zonas ya guardadas: ${existingZones.joinToString()}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        EntryField("Añadir zonas (separadas por coma) *", zone, { zone = it }, !saving)
                         SelectionField("Proyecto (opcional)", projectId, state.projects.filter { it.estado != "FINALIZADO" }.map { it.id to it.titulo }, !saving) { projectId = it }
                     } else {
                         ChoiceField("Tipo de aviso", recordKind, listOf("MEDICO", "CURSO", "DOCUMENTO"), !saving) {
@@ -78,14 +101,14 @@ import java.time.LocalDate
                             date = if (it == "DOCUMENTO") "" else LocalDate.now().toString()
                         }
                         EntryField(if (recordKind == "MEDICO") "Reconocimiento o certificado *" else if (recordKind == "DOCUMENTO") "Nombre del documento *" else "Nombre del curso *", title, { title = it }, !saving)
-                        EntryField(if (recordKind == "DOCUMENTO") "Fecha de caducidad (opcional, AAAA-MM-DD)" else "Fecha de próxima revisión / vencimiento (AAAA-MM-DD) *", date, { date = it }, !saving)
+                        DateEntryField(if (recordKind == "DOCUMENTO") "Fecha de caducidad (opcional, AAAA-MM-DD)" else "Fecha de próxima revisión / vencimiento (AAAA-MM-DD) *", date, { date = it }, !saving, recordKind != "DOCUMENTO")
                         Text(if (recordKind == "MEDICO") "Guarda aquí el reconocimiento médico y su próxima fecha de revisión. El certificado en PDF se puede adjuntar desde la ficha del trabajador, en Documentación." else if (recordKind == "DOCUMENTO") "Puedes registrar el documento aunque no conozcas su fecha de caducidad. Se avisará 30 días antes si la indicas." else "Se avisará 30 días antes de la fecha indicada.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
                 "task-new" -> {
                     EntryField("Descripción de la tarea *", title, { title = it }, !saving)
                     SelectionField("Servicio / proyecto *", projectId, state.projects.filter { it.estado != "FINALIZADO" }.map { it.id to it.titulo }, !saving) { projectId = it }
-                    EntryField("Fecha prevista (AAAA-MM-DD) *", date, { date = it }, !saving)
+                    DateEntryField("Fecha prevista (AAAA-MM-DD) *", date, { date = it }, !saving, true)
                 }
             }
             (error ?: saveError)?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -109,12 +132,19 @@ import java.time.LocalDate
                     }
                     "assignment", "obligation-new" -> {
                         val id = workerId
-                        if (id == null || workers.none { it.first == id }) error = "Selecciona un trabajador activo."
-                        else if (route == "assignment") {
-                            if (zone.isBlank()) error = "Indica la zona de trabajo."
+                        if (route == "assignment") {
+                            val zones = zone.split(Regex("[,;\\n]")).map(String::trim).filter(String::isNotBlank).distinctBy { it.normalizedSearch() }
+                            if (selectedWorkerIds.isEmpty() || workers.none { it.first in selectedWorkerIds }) error = "Selecciona al menos un trabajador activo."
+                            else if (zones.isEmpty()) error = "Añade al menos una zona habitual."
                             else if (projectId != null && state.projects.none { it.id == projectId && it.estado != "FINALIZADO" }) error = "Selecciona un proyecto pendiente."
-                            else vm.save({ setWorkerMeta(HomeWorkerMeta(workerKind, id, zone.trim())); projectId?.let { assign(HomeAssignment(workerKind, id, it)) } }, onBack)
-                        } else if (title.isBlank() || (date.isBlank() && recordKind != "DOCUMENTO") || (date.isNotBlank() && !validDate(date))) error = "Revisa descripción y fecha."
+                            else vm.save({
+                                selectedWorkerIds.forEach { worker ->
+                                    zones.forEach { setWorkerMeta(HomeWorkerMeta(workerKind, worker, it)) }
+                                    projectId?.let { assign(HomeAssignment(workerKind, worker, it)) }
+                                }
+                            }, onBack)
+                        } else if (id == null || workers.none { it.first == id }) error = "Selecciona un trabajador activo."
+                        else if (title.isBlank() || (date.isBlank() && recordKind != "DOCUMENTO") || (date.isNotBlank() && !validDate(date))) error = "Revisa descripción y fecha."
                         else vm.save({ addObligation(HomeObligation(kind = recordKind, title = title.trim(), workerKind = workerKind, workerId = id, dueDate = date.ifBlank { null })) }, onBack)
                     }
                     "task-new" -> {

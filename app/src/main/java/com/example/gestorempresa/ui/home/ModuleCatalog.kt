@@ -12,7 +12,7 @@ data class CatalogRow(
     val id: Long, val title: String, val subtitle: String, val searchText: String,
     val trade: String = "", val type: String = "", val status: String = "",
     val zone: String = "", val projectIds: Set<Long> = emptySet(), val supplierId: Long? = null,
-    val startDate: String = "", val endDate: String? = null
+    val startDate: String = "", val endDate: String? = null, val photoPath: String? = null
 )
 data class CatalogFilters(
     val query: String = "", val trade: String = "", val type: String = "", val status: String = "",
@@ -39,22 +39,24 @@ fun filterCatalog(rows: List<CatalogRow>, filters: CatalogFilters): List<Catalog
 }
 
 fun HomeWorkspaceState.catalog(kind: CatalogKind): List<CatalogRow> {
-    fun zone(workerKind: String, id: Long) = workerMeta.firstOrNull { it.workerKind == workerKind && it.workerId == id }?.workZone.orEmpty()
+    fun zone(workerKind: String, id: Long) = workerMeta.filter { it.workerKind == workerKind && it.workerId == id }
+        .joinToString { it.workZone }
     fun assigned(workerKind: String, id: Long) = assignments.filter { it.workerKind == workerKind && it.workerId == id }.map { it.projectId }.toSet()
     return when (kind) {
         CatalogKind.EMPLOYEES -> employees.map { e ->
             val z = zone("EMPLEADO", e.id)
             CatalogRow(e.id, "${e.nombre} ${e.apellidos}", "${e.oficio} · ${e.tipoEmpleado}", "${e.email} ${e.telefono} $z",
-                e.oficio, e.tipoEmpleado, if (e.activo) "ACTIVO" else "INACTIVO", z, assigned("EMPLEADO", e.id))
+                e.oficio, e.tipoEmpleado, if (e.activo) "ACTIVO" else "INACTIVO", z, assigned("EMPLEADO", e.id), photoPath = e.fotoUrl)
         }
         CatalogKind.SUBCONTRACTORS -> subcontractors.map { s ->
             val z = zone("SUBCONTRATADO", s.id)
             CatalogRow(s.id, s.nombreComercial, "${s.oficio} · ${s.personaContacto}", "${s.email} ${s.telefono} $z",
-                trade = s.oficio, type = "SUBCONTRATADO", status = if (s.activo) "ACTIVO" else "INACTIVO", zone = z, projectIds = assigned("SUBCONTRATADO", s.id))
+                trade = s.oficio, type = "SUBCONTRATADO", status = if (s.activo) "ACTIVO" else "INACTIVO", zone = z, projectIds = assigned("SUBCONTRATADO", s.id), photoPath = s.fotoUrl)
         }
         CatalogKind.PROJECTS -> projects.map { p -> CatalogRow(p.id, p.titulo, "${p.clienteNombre.ifBlank { "Sin cliente" }} · ${p.direccionUbicacion}",
             "${p.tipo} ${p.estado} ${p.fechaInicio} ${p.fechaFin.orEmpty()}", type = p.tipo, status = p.estado,
-            zone = p.direccionUbicacion, startDate = p.fechaInicio, endDate = p.fechaFin) }
+            zone = p.direccionUbicacion, startDate = p.fechaInicio, endDate = p.fechaFin,
+            photoPath = attachments.firstOrNull { it.ownerKind == "PROYECTO" && it.ownerId == p.id && it.type == "FOTO" }?.path) }
         CatalogKind.SUPPLIERS -> suppliers.map { s -> CatalogRow(s.id, s.nombreEmpresa, s.personaContacto, "${s.cif} ${s.telefono} ${s.email}") }
         CatalogKind.MATERIALS -> materials.map { m ->
             val supplier = suppliers.firstOrNull { it.id == m.proveedorId }?.nombreEmpresa ?: "Proveedor no disponible"

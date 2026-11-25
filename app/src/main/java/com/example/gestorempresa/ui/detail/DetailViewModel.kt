@@ -22,7 +22,7 @@ class DetailViewModel(selection: CatalogSelection, state: HomeWorkspaceState) : 
 
     private fun employee(id: Long, state: HomeWorkspaceState): DetailContent? {
         val person = state.employees.firstOrNull { it.id == id } ?: return null
-        val zone = state.workerMeta.firstOrNull { it.workerKind == "EMPLEADO" && it.workerId == id }?.workZone
+        val zone = state.workerMeta.filter { it.workerKind == "EMPLEADO" && it.workerId == id }.joinToString { it.workZone }
         val assignments = state.assignments.filter { it.workerKind == "EMPLEADO" && it.workerId == id }
             .mapNotNull { a -> state.projects.firstOrNull { it.id == a.projectId } }
         val hours = state.hours.filter { it.empleadoId == id }.sortedByDescending { it.fecha }
@@ -31,7 +31,7 @@ class DetailViewModel(selection: CatalogSelection, state: HomeWorkspaceState) : 
             DetailSection("Datos personales", listOf(
                 DetailField("DNI", person.dni), DetailField("Nº de Seguridad Social", person.numeroSeguridadSocial.ifBlank { "Sin indicar" }), DetailField("Teléfono", person.telefono), DetailField("Correo", person.email),
                 DetailField("Tipo de empleado", person.tipoEmpleado), DetailField("Residencia", person.lugarResidencia),
-                DetailField("Dirección", person.direccionPersonal), DetailField("Zona de trabajo", zone ?: "Sin indicar"),
+                DetailField("Dirección", person.direccionPersonal), DetailField("Zonas de trabajo", zone.ifBlank { "Sin indicar" }),
                 DetailField("Salario base", "${"%.2f".format(person.salarioBase)} €")
             )),
             DetailSection("Servicios y proyectos", assignments.map { DetailField(it.titulo, "${it.direccionUbicacion} · ${it.estado}") }.ifEmpty { listOf(DetailField("Asignaciones", "Sin asignaciones")) }),
@@ -47,13 +47,13 @@ class DetailViewModel(selection: CatalogSelection, state: HomeWorkspaceState) : 
 
     private fun subcontractor(id: Long, state: HomeWorkspaceState): DetailContent? {
         val worker = state.subcontractors.firstOrNull { it.id == id } ?: return null
-        val zone = state.workerMeta.firstOrNull { it.workerKind == "SUBCONTRATADO" && it.workerId == id }?.workZone
+        val zone = state.workerMeta.filter { it.workerKind == "SUBCONTRATADO" && it.workerId == id }.joinToString { it.workZone }
         val projects = state.assignments.filter { it.workerKind == "SUBCONTRATADO" && it.workerId == id }
             .mapNotNull { a -> state.projects.firstOrNull { it.id == a.projectId } }
         val hours = state.hours.filter { it.subcontratadoId == id }.sortedByDescending { it.fecha }
         return DetailContent(worker.nombreComercial, "${worker.oficio} · ${if (worker.activo) "Activo" else "Inactivo"}", listOf(
             DetailSection("Datos de contacto", listOf(DetailField("Persona de contacto", worker.personaContacto), DetailField("CIF / DNI", worker.cifDni),
-                DetailField("Teléfono", worker.telefono), DetailField("Correo", worker.email), DetailField("Zona de trabajo", zone ?: "Sin indicar"),
+                DetailField("Teléfono", worker.telefono), DetailField("Correo", worker.email), DetailField("Zonas de trabajo", zone.ifBlank { "Sin indicar" }),
                 DetailField("Tarifa por hora", "${"%.2f".format(worker.tarifaHoraPorDefecto)} €"))),
             DetailSection("Servicios y proyectos", projects.map { DetailField(it.titulo, "${it.direccionUbicacion} · ${it.estado}") }.ifEmpty { listOf(DetailField("Asignaciones", "Sin asignaciones")) }),
             DetailSection("Historial de horas", hours.map { h -> DetailField(h.fecha,
@@ -81,7 +81,7 @@ class DetailViewModel(selection: CatalogSelection, state: HomeWorkspaceState) : 
                 "${state.workerName(if (h.empleadoId != null) "EMPLEADO" else "SUBCONTRATADO", h.empleadoId ?: h.subcontratadoId ?: 0)} · ${h.horasTrabajadas} h · ${"%.2f".format(h.costeHoraAplicado)} €/h") }
                 .ifEmpty { listOf(DetailField("Horas", "Todavía no hay horas registradas")) }),
             DetailSection("Movimientos económicos", movements.map { m -> DetailField(m.date,
-                "${m.concept} · ${if (m.income) "Ingreso" else "Gasto"} · ${"%.2f".format(m.amountCents / 100.0)} €") }
+                "${m.concept} · ${if (m.income) "Ingreso" else "Gasto · ${m.category}"} · ${"%.2f".format(m.amountCents / 100.0)} €") }
                 .ifEmpty { listOf(DetailField("Movimientos", "No hay ingresos o gastos registrados")) }),
             DetailSection("Proveedores relacionados", suppliers.map { DetailField(it.nombreEmpresa, it.personaContacto.ifBlank { it.telefono },
                 CatalogSelection(CatalogKind.SUPPLIERS, it.id)) }.ifEmpty { listOf(DetailField("Proveedores", "Sin materiales registrados")) }),

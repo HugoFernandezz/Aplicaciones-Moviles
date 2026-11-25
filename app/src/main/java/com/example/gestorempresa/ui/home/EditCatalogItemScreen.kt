@@ -6,9 +6,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -73,8 +75,8 @@ fun EditCatalogItemScreen(selection: CatalogSelection, state: HomeWorkspaceState
                 EntryField(if (type == "SERVICIO") "Nombre del servicio o local *" else "Nombre del proyecto *", title, { title = it }, !saving)
                 if (type == "PROYECTO") EntryField("Cliente (opcional)", client, { client = it }, !saving)
                 EntryField("Ubicación o dirección *", location, { location = it }, !saving)
-                EntryField(if (type == "SERVICIO") "Fecha de apertura (AAAA-MM-DD) *" else "Fecha de inicio (AAAA-MM-DD) *", startDate, { startDate = it }, !saving)
-                if (type == "PROYECTO") EntryField("Fecha de fin prevista (opcional)", endDate, { endDate = it }, !saving)
+                DateEntryField(if (type == "SERVICIO") "Fecha de apertura (AAAA-MM-DD) *" else "Fecha de inicio (AAAA-MM-DD) *", startDate, { startDate = it }, !saving, true)
+                if (type == "PROYECTO") DateEntryField("Fecha de fin prevista (opcional)", endDate, { endDate = it }, !saving, endDate.isNotBlank())
             }
             CatalogKind.SUBCONTRACTORS -> {
                 EntryField("Nombre comercial *", title, { title = it }, !saving)
@@ -96,6 +98,10 @@ fun EditCatalogItemScreen(selection: CatalogSelection, state: HomeWorkspaceState
                 EntryField("Nombre del material *", title, { title = it }, !saving)
                 SelectionField("Proveedor *", supplierId, state.suppliers.map { it.id to it.nombreEmpresa }, !saving) { supplierId = it }
                 EntryField("Unidad de medida *", unit, { unit = it }, !saving)
+                val previousUnits = state.materials.map { it.unidadMedida.trim() }.filter(String::isNotBlank).distinctBy { it.normalizedSearch() }
+                if (previousUnits.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    previousUnits.take(8).forEach { option -> AssistChip(onClick = { unit = option }, label = { Text(option) }, enabled = !saving) }
+                }
                 EntryField("Precio unitario (€) *", amount, { amount = it }, !saving)
             }
             CatalogKind.EMPLOYEES -> Unit
