@@ -24,6 +24,7 @@ import com.example.gestorempresa.data.local.HomeMovement
 import com.example.gestorempresa.data.local.HomeAttachment
 import com.example.gestorempresa.data.media.AttachmentStorage
 import com.example.gestorempresa.data.local.entities.*
+import com.example.gestorempresa.domain.phone.InternationalPhones
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.time.LocalDate
@@ -39,13 +40,18 @@ internal fun validDate(value: String): Boolean = try {
     value.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) && LocalDate.parse(value).toString() == value
 } catch (_: Exception) { false }
 
-internal fun validSpanishDni(value: String): Boolean {
+internal fun spanishDniError(value: String): String? {
     val normalized = value.trim().uppercase().replace(" ", "")
-    val match = Regex("^([0-9XYZ])(\\d{7})([A-Z])$").matchEntire(normalized) ?: return false
+    if (normalized.isEmpty()) return "Introduce el DNI/NIE."
+    val match = Regex("^([0-9XYZ])([0-9]{7})([A-Z])$").matchEntire(normalized)
+        ?: return "DNI: 8 números y una letra. NIE: X, Y o Z, 7 números y una letra."
     val prefix = when (match.groupValues[1]) { "X" -> "0"; "Y" -> "1"; "Z" -> "2"; else -> match.groupValues[1] }
-    val number = (prefix + match.groupValues[2]).toIntOrNull() ?: return false
-    return "TRWAGMYFPDXBNJZSQVHLCKE"[number % 23] == match.groupValues[3][0]
+    val number = (prefix + match.groupValues[2]).toInt()
+    return if ("TRWAGMYFPDXBNJZSQVHLCKE"[number % 23] == match.groupValues[3][0]) null
+        else "El formato es correcto, pero la letra de control no coincide. Revisa los números y la letra del documento."
 }
+
+internal fun validSpanishDni(value: String): Boolean = spanishDniError(value) == null
 
 private fun formatSsn(value: String): String = value.filter { it.isDigit() }.take(12).chunked(4).joinToString(" ")
 private fun formatDateDigits(value: String): String {
@@ -62,11 +68,14 @@ fun HomeEntryForm(kind: String, vm: HomeWorkspaceViewModel, state: HomeWorkspace
         var trade by rememberSaveable { mutableStateOf(editingEmployee?.oficio.orEmpty()) }
         var type by rememberSaveable { mutableStateOf(editingEmployee?.tipoEmpleado?.let { if (it == "FIJO") "COMPLETO" else it } ?: if (kind == "project-new") "SERVICIO" else "COMPLETO") }
         var dni by rememberSaveable { mutableStateOf(editingEmployee?.dni.orEmpty()) }
+        val dniError = spanishDniError(dni)
         var socialSecurity by rememberSaveable { mutableStateOf(editingEmployee?.numeroSeguridadSocial.orEmpty().filter { it.isDigit() }.take(12)) }
         var residence by rememberSaveable { mutableStateOf(editingEmployee?.lugarResidencia.orEmpty()) }
         var address by rememberSaveable { mutableStateOf(editingEmployee?.direccionPersonal.orEmpty()) }
         var salary by rememberSaveable { mutableStateOf(editingEmployee?.salarioBase?.takeIf { it > 0 }?.toString().orEmpty()) }
-        var phone by rememberSaveable { mutableStateOf(editingEmployee?.telefono.orEmpty().filter { it.isDigit() }.take(15)) }
+        val initialPhone = remember { InternationalPhones.restore(editingEmployee?.telefono.orEmpty()) }
+        var phoneRegion by rememberSaveable { mutableStateOf(initialPhone.region) }
+        var phone by rememberSaveable { mutableStateOf(initialPhone.number) }
         var email by rememberSaveable { mutableStateOf(editingEmployee?.email.orEmpty()) }
         var client by rememberSaveable { mutableStateOf("") }
         var location by rememberSaveable { mutableStateOf("") }
@@ -82,6 +91,8 @@ fun HomeEntryForm(kind: String, vm: HomeWorkspaceViewModel, state: HomeWorkspace
         var attemptedSave by rememberSaveable { mutableStateOf(false) }
         val dniFocus = remember { FocusRequester() }
         val dniBringIntoView = remember { BringIntoViewRequester() }
+        val phoneFocus = remember { FocusRequester() }
+        val phoneBringIntoView = remember { BringIntoViewRequester() }
         val coroutineScope = rememberCoroutineScope()
         val context = LocalContext.current
         var pendingPdfs by rememberSaveable { mutableStateOf(emptyList<List<String>>()) }
@@ -117,15 +128,19 @@ fun HomeEntryForm(kind: String, vm: HomeWorkspaceViewModel, state: HomeWorkspace
             if (kind == "employee-new" || kind == "employee-edit") {
                 EntryField("Nombre *", title, { title = it }, !saving)
                 EntryField("Apellidos *", surname, { surname = it }, !saving)
-                OutlinedTextField(dni, { dni = it.uppercase().filter { c -> c.isLetterOrDigit() }.take(9) },
+                OutlinedTextField(dni, {
+                    dni = it.uppercase().filter { c -> c.isLetterOrDigit() }.take(9)
+                    if (error == dniError) error = null
+                },
                     label = { Text("DNI / NIE *") }, singleLine = true, enabled = !saving,
-                    isError = attemptedSave && !validSpanishDni(dni),
-                    supportingText = { if (attemptedSave && !validSpanishDni(dni)) Text("Comprueba los números y la letra de control del DNI/NIE.") },
+                    isError = attemptedSave && dniError != null,
+                    supportingText = { if (attemptedSave && dniError != null) Text(dniError) },
                     modifier = Modifier.fillMaxWidth().focusRequester(dniFocus).bringIntoViewRequester(dniBringIntoView))
                 TradeSuggestionField(trade, { trade = it }, state.employees.map { e -> e.oficio }, !saving)
                 ChoiceField("Jornada", if (type == "FIJO") "COMPLETO" else type, listOf("COMPLETO", "PARCIAL"), !saving) { type = it }
                 Text(if (type == "PARCIAL") "Jornada parcial: horario reducido. Registra las horas realizadas desde Parte diario." else "Jornada completa. Registra las horas realizadas desde Parte diario.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                EntryField("Teléfono *", phone, { phone = it }, !saving)
+                InternationalPhoneField(phoneRegion, phone, { phoneRegion = it.region; phone = it.number }, !saving, attemptedSave,
+                    Modifier.focusRequester(phoneFocus).bringIntoViewRequester(phoneBringIntoView))
                 EntryField("Correo electrónico *", email, { email = it }, !saving)
                 EntryField("Salario base mensual (€) *", salary, { salary = it }, !saving)
                 OutlinedTextField(value = formatSsn(socialSecurity), onValueChange = { socialSecurity = it.filter { c -> c.isDigit() }.take(12) },
@@ -182,13 +197,16 @@ fun HomeEntryForm(kind: String, vm: HomeWorkspaceViewModel, state: HomeWorkspace
                     when (kind) {
                         "employee-new", "employee-edit" -> {
                             if (!validPersonName(title) || !validPersonName(surname)) error = "El nombre y los apellidos solo pueden contener letras, espacios, guiones o apóstrofos."
-                    else if (!validSpanishDni(dni)) {
-                        error = "El DNI/NIE no es válido: revisa su formato y la letra de control."
+                    else if (dniError != null) {
+                        error = dniError
                         attemptedSave = true
                         coroutineScope.launch { runCatching { dniFocus.requestFocus(); dniBringIntoView.bringIntoView() } }
                     }
                             else if (trade.isBlank()) error = "Indica el oficio del empleado."
-                            else if (phone.length !in 9..15) error = "El teléfono debe tener entre 9 y 15 dígitos."
+                            else if (InternationalPhones.toE164(phone, phoneRegion) == null) {
+                                error = "Revisa el teléfono y el prefijo del país seleccionado."
+                                coroutineScope.launch { phoneFocus.requestFocus(); phoneBringIntoView.bringIntoView() }
+                            }
                             else if (email.isBlank() || !android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) error = "Introduce un correo electrónico válido."
                             else if (salary.isBlank() || (salary.replace(',', '.').toDoubleOrNull()?.let { !it.isFinite() || it < 0 } != false)) error = "Introduce un salario base válido."
                             else if (residence.isBlank() || address.isBlank()) error = "Completa el lugar de residencia y la dirección personal."
@@ -196,7 +214,7 @@ fun HomeEntryForm(kind: String, vm: HomeWorkspaceViewModel, state: HomeWorkspace
                             else {
                                 val salaryValue = salary.replace(',', '.').toDouble()
                                 val value = EmpleadoEntity(id = editingEmployee?.id ?: 0, nombre = title.trim(), apellidos = surname.trim(), dni = dni.trim(),
-                                    telefono = phone.trim(), email = email.trim(), oficio = trade.trim(), tipoEmpleado = type, salarioBase = salaryValue,
+                                    telefono = requireNotNull(InternationalPhones.toE164(phone, phoneRegion)), email = email.trim(), oficio = trade.trim(), tipoEmpleado = type, salarioBase = salaryValue,
                                     lugarResidencia = residence.trim(), direccionPersonal = address.trim(), fotoUrl = editingEmployee?.fotoUrl,
                                     activo = editingEmployee?.activo ?: true, numeroSeguridadSocial = socialSecurity)
                                 vm.save({

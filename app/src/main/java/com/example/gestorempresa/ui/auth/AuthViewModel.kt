@@ -16,6 +16,7 @@ data class AuthUiState(
     val email: String = "", val password: String = "",
     val registro: RegistroUsuario = RegistroUsuario("", "", "", "", "", "", ""),
     val errores: Map<CampoAuth, String> = emptyMap(),
+    val intentoValidacion: Int = 0,
     val mensaje: String? = null, val ocupado: Boolean = false,
     val emailRecuperacion: String = "", val recuperacionSolicitada: Boolean = false
 )
@@ -52,7 +53,8 @@ class AuthViewModel @Inject constructor(
     fun editarLogin(email: String = _ui.value.email, password: String = _ui.value.password) {
         if (_ui.value.ocupado) return
         savedState["loginEmail"] = email
-        _ui.update { it.copy(email = email, password = password, errores = emptyMap(), mensaje = null) }
+        _ui.update { state -> state.copy(email = email, password = password,
+            errores = if (state.errores.isEmpty()) emptyMap() else AuthValidator.validarLogin(email, password, 4096), mensaje = null) }
     }
 
     fun editarRegistro(datos: RegistroUsuario) {
@@ -62,7 +64,8 @@ class AuthViewModel @Inject constructor(
         savedState["registroEmail"] = datos.email
         savedState["empresa"] = datos.empresa
         savedState["sector"] = datos.sector
-        _ui.update { it.copy(registro = datos, errores = emptyMap(), mensaje = null) }
+        _ui.update { state -> state.copy(registro = datos,
+            errores = if (state.errores.isEmpty()) emptyMap() else AuthValidator.validarRegistro(datos), mensaje = null) }
     }
 
     fun iniciarSesion() {
@@ -77,9 +80,10 @@ class AuthViewModel @Inject constructor(
     }
 
     fun registrar() {
+        if (_ui.value.ocupado) return
         val form = _ui.value.registro
         val errors = AuthValidator.validarRegistro(form)
-        if (errors.isNotEmpty()) { _ui.update { it.copy(errores = errors) }; return }
+        if (errors.isNotEmpty()) { _ui.update { it.copy(errores = errors, intentoValidacion = it.intentoValidacion + 1) }; return }
         lanzar {
             when (val result = repository.registrar(form)) {
                 ResultadoAuth.Correcto -> {
@@ -88,7 +92,12 @@ class AuthViewModel @Inject constructor(
                     _ui.update { it.copy(email = email, registro = it.registro.copy(password = "", confirmarPassword = "")) }
                     eventChannel.send(AuthEvent.CuentaCreada(email))
                 }
-                is ResultadoAuth.Error -> mostrarResultado(result)
+                is ResultadoAuth.Error -> {
+                    mostrarResultado(result)
+                    if (result.tipo == ErrorAuth.EMAIL_EN_USO) _ui.update { it.copy(
+                        errores = mapOf(CampoAuth.EMAIL to "Ya existe una cuenta con este correo. Inicia sesión."),
+                        intentoValidacion = it.intentoValidacion + 1) }
+                }
             }
         }
     }
@@ -158,7 +167,8 @@ class AuthViewModel @Inject constructor(
             ErrorAuth.SERVICIO_NO_CONFIGURADO -> "El servicio de acceso por correo aún no está disponible. Contacta con el responsable de la aplicación."
             ErrorAuth.SIN_CONEXION -> "No se ha podido conectar. Comprueba tu conexión a Internet y vuelve a intentarlo."
             ErrorAuth.SERVICIO_NO_DISPONIBLE -> "El servicio de acceso no está disponible en este momento. Inténtalo más tarde."
-            ErrorAuth.PERFIL_NO_DISPONIBLE -> "El correo y la contraseña son válidos, pero no encontramos el perfil de empresa guardado en este móvil. La app guarda ese perfil solo en el dispositivo donde se registró; si reinstalaste la app o cambiaste de móvil, no puede recuperarlo automáticamente."
+            ErrorAuth.PERFIL_NO_DISPONIBLE -> "La cuenta está autenticada, pero falta publicar su perfil. Actualiza la app e inicia sesión una vez en el teléfono original para sincronizarlo. Si ya no lo tienes, contacta con el responsable."
+            ErrorAuth.PERFIL_SINCRONIZACION_PENDIENTE -> "La cuenta se creó, pero falta sincronizar el perfil. No vuelvas a registrarte: inicia sesión en este teléfono con conexión para completar el proceso."
             ErrorAuth.VINCULACION_NECESARIA -> "El correo ya tiene otra contraseña en el servicio de acceso. Contacta con el responsable para vincular tu cuenta anterior."
             ErrorAuth.DEMASIADAS_SOLICITUDES -> "Demasiadas solicitudes. Espera unos minutos antes de volver a intentarlo."
         }) }

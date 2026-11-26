@@ -2,129 +2,115 @@ package com.example.gestorempresa.ui.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.gestorempresa.domain.auth.AuthRepository
-import com.example.gestorempresa.domain.auth.ErrorAuth
-import com.example.gestorempresa.domain.auth.ResultadoAuth
-import com.example.gestorempresa.domain.settings.AjustesApp
-import com.example.gestorempresa.domain.settings.SettingsRepository
-import com.example.gestorempresa.domain.settings.TemaApp
+import com.example.gestorempresa.domain.auth.*
+import com.example.gestorempresa.domain.settings.*
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
-/** Todo lo que necesita la pantalla de Ajustes para dibujarse. */
 data class SettingsUiState(
     val cargando: Boolean = true,
     val ajustes: AjustesApp = AjustesApp(),
-    /** Datos de la cuenta que se muestran en la sección "Cuenta". */
     val email: String = "",
     val empresa: String = "",
-    /** Momento (en milisegundos) en que caduca la sesión actual. */
     val sesionExpiraEn: Long? = null,
     val enviandoCorreo: Boolean = false,
-    val mensaje: String? = null
+    val mensaje: String? = null,
+    val usuarioId: Long? = null,
+    val guardando: Boolean = false
 )
 
-/**
- * Gestiona las preferencias del usuario y la seguridad de la cuenta.
- * El cierre de sesión NO está aquí: lo hace AuthViewModel (Miembro 1), y la pantalla lo recibe como parámetro.
- */
-@OptIn(ExperimentalCoroutinesApi::class) // necesario para usar flatMapLatest
+@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val settingsRepository: SettingsRepository
 ) : ViewModel() {
-
     private val _ui = MutableStateFlow(SettingsUiState())
-    val ui: StateFlow<SettingsUiState> = _ui.asStateFlow()
-
-    /** Usuario de la sesión actual; hace falta para saber de quién son los ajustes que se guardan. */
+    val ui = _ui.asStateFlow()
     private var usuarioId: Long? = null
-
+    private var generacion = 0
+    private var pendientes = 0
+    private val mutex = Mutex()
     init {
         viewModelScope.launch {
-            authRepository.sesion
-                .flatMapLatest { sesion ->
-                    if (sesion == null) flowOf(null to AjustesApp())
-                    else settingsRepository.observarAjustes(sesion.usuario.id).map { ajustes -> sesion to ajustes }
+            authRepository.sesion.flatMapLatest { sesion ->
+                val id = sesion?.usuario?.id
+                if (usuarioId != id) {
+                    generacion++; pendientes = 0; usuarioId = id
+                    _ui.value = SettingsUiState(cargando = id != null, usuarioId = id)
                 }
-                .catch { _ui.update { it.copy(mensaje = "No se han podido cargar los ajustes.") } }
-                .collect { (sesion, ajustes) ->
-                    usuarioId = sesion?.usuario?.id
-                    _ui.update {
-                        it.copy(
-                            cargando = false,
-                            ajustes = ajustes,
-                            email = sesion?.usuario?.email.orEmpty(),
-                            empresa = sesion?.empresa?.nombre.orEmpty(),
-                            sesionExpiraEn = sesion?.expiraEn
-                        )
+                if (sesion == null) flowOf(null to AjustesApp())
+                else settingsRepository.observarAjustes(sesion.usuario.id).map { sesion to it }
+                    .catch {
+                        _ui.update { it.copy(mensaje = "No se han podido cargar los ajustes.", cargando = false) }
+                        emit(sesion to AjustesApp())
                     }
-                }
+            }.collect { (sesion, preferencias) ->
+                _ui.update { it.copy(cargando = false, ajustes = preferencias,
+                    usuarioId = sesion?.usuario?.id, email = sesion?.usuario?.email.orEmpty(),
+                    empresa = sesion?.empresa?.nombre.orEmpty(), sesionExpiraEn = sesion?.expiraEn) }
+            }
         }
     }
-
-    // --- Notificaciones ---
 
     fun cambiarAvisosVencimientos(activado: Boolean) = guardar { it.copy(avisosVencimientos = activado) }
-
-    fun cambiarDiasAntelacion(dias: Int) = guardar { it.copy(diasAntelacion = dias) }
-
+    fun cambiarDiasAntelacion(dias: Int) {
+        if (dias in AjustesApp.opcionesAntelacion) guardar { it.copy(diasAntelacion = dias) }
+    }
     fun cambiarAvisosTareas(activado: Boolean) = guardar { it.copy(avisosTareas = activado) }
-
-    // --- Preferencias ---
-
     fun cambiarTema(tema: TemaApp) = guardar { it.copy(tema = tema) }
 
-    // --- Seguridad ---
-
-    /** Envía al correo del usuario un enlace para cambiar la contraseña (usa el servicio del Miembro 1). */
     fun solicitarCambioPassword() {
         val email = _ui.value.email
-        if (email.isBlank() || _ui.value.enviandoCorreo) return
-        _ui.update { it.copy(enviandoCorreo = true) }
+        if (usuarioId == null || email.isBlank() || _ui.value.enviandoCorreo) return
+        val version = generacion
+        _ui.update { it.copy(enviandoCorreo = true, mensaje = null) }
         viewModelScope.launch {
-            val mensaje = try {
-                when (val resultado = authRepository.recuperarPassword(email)) {
-                    ResultadoAuth.Correcto -> "Te hemos enviado un correo a $email para cambiar la contraseña."
-                    is ResultadoAuth.Error -> when (resultado.tipo) {
+            try {
+                val mensaje = when (val result = authRepository.recuperarPassword(email)) {
+                    ResultadoAuth.Correcto -> "Solicitud aceptada. Revisa el correo de $email y la carpeta de spam para cambiar la contraseña."
+                    is ResultadoAuth.Error -> when (result.tipo) {
                         ErrorAuth.SIN_CONEXION -> "No hay conexión a Internet. Inténtalo de nuevo."
                         ErrorAuth.DEMASIADAS_SOLICITUDES -> "Demasiadas solicitudes. Espera unos minutos."
-                        else -> "No se ha podido enviar el correo. Inténtalo más tarde."
+                        else -> "No se ha podido solicitar el correo. Inténtalo más tarde."
                     }
                 }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Exception) {
-                "No se ha podido enviar el correo. Inténtalo más tarde."
-            }
-            _ui.update { it.copy(enviandoCorreo = false, mensaje = mensaje) }
+                if (version == generacion) _ui.update { it.copy(mensaje = mensaje) }
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) { if (version == generacion) _ui.update { it.copy(mensaje = "No se ha podido solicitar el correo.") } }
+            finally { if (version == generacion) _ui.update { it.copy(enviandoCorreo = false) } }
         }
     }
 
-    fun mensajeMostrado() {
-        _ui.update { it.copy(mensaje = null) }
-    }
+    fun mensajeMostrado() { _ui.update { it.copy(mensaje = null) } }
 
-    /**
-     * Aplica un cambio a los ajustes: primero se ve en pantalla al momento
-     * y después se guarda en la base de datos.
-     */
     private fun guardar(cambio: (AjustesApp) -> AjustesApp) {
         val id = usuarioId ?: return
-        val nuevos = cambio(_ui.value.ajustes)
-        _ui.update { it.copy(ajustes = nuevos) }
+        if (_ui.value.cargando) return
+        val version = generacion
+        pendientes++
+        _ui.update { it.copy(guardando = true, mensaje = null) }
         viewModelScope.launch {
             try {
-                settingsRepository.guardarAjustes(id, nuevos)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Exception) {
-                _ui.update { it.copy(mensaje = "No se ha podido guardar el ajuste.") }
+                mutex.withLock {
+                    if (version != generacion || usuarioId != id) return@withLock
+                    val anteriores = settingsRepository.observarAjustes(id).first()
+                    val nuevos = cambio(anteriores)
+                    settingsRepository.guardarAjustes(id, nuevos)
+                    if (version == generacion) _ui.update { it.copy(ajustes = nuevos) }
+                }
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) {
+                if (version == generacion) _ui.update { it.copy(mensaje = "No se ha podido guardar el ajuste. Se mantiene el valor anterior.") }
+            } finally {
+                if (version == generacion) {
+                    pendientes--
+                    _ui.update { it.copy(guardando = pendientes > 0) }
+                }
             }
         }
     }

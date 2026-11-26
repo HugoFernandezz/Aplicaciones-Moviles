@@ -1,5 +1,7 @@
 package com.example.gestorempresa.ui.advanced.communication
 
+import com.example.gestorempresa.domain.phone.InternationalPhones
+
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -35,9 +37,14 @@ fun fillTemplate(text: String, values: Map<String, String>): String =
 
 /**
  * Prepara el número para WhatsApp (wa.me exige el prefijo del país y solo dígitos).
- * Si el número tiene 9 dígitos se entiende que es de España y se añade el 34.
+ * Los prefijos explícitos se respetan. Solo los contactos antiguos sin prefijo
+ * conservan la compatibilidad con números nacionales españoles de 9 dígitos.
  */
 fun whatsappNumber(phone: String): String? {
+    val text = phone.trim()
+    if (text.startsWith("+") || text.startsWith("00")) {
+        return InternationalPhones.internationalE164(text)?.removePrefix("+")
+    }
     var digits = phone.trim().let { if (it.startsWith("+")) it.drop(1) else it }.filter { it.isDigit() }
     if (digits.startsWith("00")) digits = digits.drop(2)
     if (digits.length == 9) digits = "34$digits"

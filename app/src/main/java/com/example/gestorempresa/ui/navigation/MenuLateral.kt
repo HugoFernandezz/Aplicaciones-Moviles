@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.gestorempresa.ui.profile.components.ProfileAvatar
 
 /** Una opción del menú lateral. */
 data class OpcionMenu(
@@ -49,12 +50,16 @@ fun MenuLateral(
     subtitulo: String,
     opciones: List<OpcionMenu>,
     rutaSeleccionada: String,
-    onElegir: (String) -> Unit
+    onElegir: (String) -> Unit,
+    fotoRuta: String? = null,
+    iniciales: String = ""
 ) {
     ModalDrawerSheet(Modifier.testTag("menu-lateral")) {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(vertical = 12.dp)) {
             // Cabecera
             Column(Modifier.padding(horizontal = 28.dp, vertical = 16.dp)) {
+                ProfileAvatar(fotoRuta, iniciales.ifBlank { subtitulo.split(' ').mapNotNull { it.firstOrNull()?.toString() }.take(2).joinToString("") },
+                    tamano = 64.dp, modifier = Modifier.testTag("menu-profile-avatar"))
                 Text(titulo, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                 Text(subtitulo, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }

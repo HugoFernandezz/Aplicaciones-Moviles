@@ -1,6 +1,11 @@
 *.iml
 .gradle
+.firebase/
+**/node_modules/
+firebase-debug.log
+firestore-debug.log
 .kotlin/
+.local/debug-tls/
 /local.properties
 /.idea/caches
 /.idea/libraries

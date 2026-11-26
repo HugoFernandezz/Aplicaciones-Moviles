@@ -32,14 +32,15 @@ class ModuleCatalogTest {
         assertEquals(1L, filterCatalog(materials, CatalogFilters(type = "litro", supplierId = 7)).single().id)
     }
     @Test fun summarySeparatesUpcomingExpiredAndResolvedRecords() {
+        val today = LocalDate.parse("2026-10-24")
         val state = HomeWorkspaceState(loading = false, obligations = listOf(
             HomeObligation(1, "MEDICO", "Revisión", "EMPLEADO", 1, "2026-10-24"),
-            HomeObligation(2, "CURSO", "PRL", "EMPLEADO", 1, "2026-11-10"),
-            HomeObligation(3, "CURSO", "Futuro", "EMPLEADO", 1, "2028-01-01"),
+            HomeObligation(2, "CURSO", "PRL", "EMPLEADO", 1, today.plusDays(15).toString()),
+            HomeObligation(3, "CURSO", "Futuro", "EMPLEADO", 1, today.plusDays(16).toString()),
             HomeObligation(4, "DOCUMENTO", "Contrato", "EMPLEADO", 1),
             HomeObligation(5, "MEDICO", "Archivado", "EMPLEADO", 1, "2026-01-01", true)),
             tasks = listOf(HomeTask(1, "Hoy", 1, "2026-10-24"), HomeTask(2, "Terminada", 1, "2026-01-01", true)))
-        val summary = state.summary("Ana", "Empresa", LocalDate.parse("2026-10-24"))
+        val summary = state.summary("Ana", "Empresa", today)
         assertEquals(1, summary.medicosProximos)
         assertEquals(1, summary.cursosProximos)
         assertEquals(1, summary.documentosPendientes)

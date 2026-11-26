@@ -3,6 +3,14 @@ package com.example.gestorempresa.data.local
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
+/** Añade dirección sin perder teléfono, fotografía ni preferencias anteriores. */
+val MIGRATION_6_7 = object : Migration(6, 7) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE perfiles ADD COLUMN direccion TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE perfiles ADD COLUMN telefonoRegion TEXT")
+    }
+}
+
 /**
  * Versión 5: añade las tablas de Perfil y Ajustes (Miembro 4).
  * Solo crea tablas nuevas, así que los usuarios, empresas y empleados existentes no se tocan.

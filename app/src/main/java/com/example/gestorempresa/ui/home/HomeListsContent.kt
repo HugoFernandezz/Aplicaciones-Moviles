@@ -28,12 +28,15 @@ import com.example.gestorempresa.ui.detail.DetailScreen
 import com.example.gestorempresa.ui.detail.DetailViewModel
 import com.example.gestorempresa.ui.navigation.BarraSuperior
 import com.example.gestorempresa.ui.navigation.MenuLateral
+import com.example.gestorempresa.ui.navigation.OpcionMenu
+import com.example.gestorempresa.domain.profile.PerfilAdministrador
 import kotlinx.coroutines.launch
 
 /** El miembro 3 recibe tipo e id mediante onOpenDetails, sin duplicar sus pantallas. */
 @Composable
 fun HomeListsContent(session: SesionUsuario, modifier: Modifier = Modifier,
-    onOpenDetails: ((CatalogSelection) -> Unit)? = null, warnDays: Int = 15, resetHomeSignal: Int = 0, onNotifyNow: () -> Unit = {}) {
+    onOpenDetails: ((CatalogSelection) -> Unit)? = null, warnDays: Int = 15, resetHomeSignal: Int = 0, onNotifyNow: () -> Unit = {},
+    perfil: PerfilAdministrador? = null, menuUsuario: List<OpcionMenu> = emptyList(), onUserNavigation: ((String) -> Unit)? = null) {
     val context = LocalContext.current.applicationContext
     val companyId = session.empresa.id
     val owner = remember(companyId, session.usuario.id) {
@@ -137,9 +140,16 @@ fun HomeListsContent(session: SesionUsuario, modifier: Modifier = Modifier,
                 MenuLateral(
                     titulo = session.empresa.nombre,
                     subtitulo = "${session.usuario.nombre} ${session.usuario.apellidos}",
-                    opciones = homeMenuOptions(avisos = alerts.size, avisosUrgentes = alerts.any { it.urgente }),
+                    opciones = homeMenuOptions(avisos = alerts.size, avisosUrgentes = alerts.any { it.urgente }) +
+                        if (onUserNavigation != null) menuUsuario else emptyList(),
                     rutaSeleccionada = destination,
-                    onElegir = { route -> navigate(route); scope.launch { drawerState.close() } }
+                    onElegir = { route ->
+                        if (route.startsWith("user:") && onUserNavigation != null) {
+                            scope.launch { drawerState.close(); onUserNavigation(route) }
+                        } else { navigate(route); scope.launch { drawerState.close() } }
+                    },
+                    fotoRuta = perfil?.takeIf { it.usuarioId == session.usuario.id }?.fotoRuta,
+                    iniciales = perfil?.takeIf { it.usuarioId == session.usuario.id }?.iniciales.orEmpty()
                 )
             }
         ) {

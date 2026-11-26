@@ -2,7 +2,7 @@ package com.example.gestorempresa.domain.auth
 
 import kotlinx.coroutines.flow.Flow
 
-data class Empresa(val id: Long, val nombre: String, val sector: String)
+data class Empresa(val id: Long, val nombre: String, val sector: String, val remoteId: String? = null)
 
 // El modelo que recibe la UI no contiene hashes, sales ni contraseñas.
 data class Usuario(
@@ -31,7 +31,7 @@ enum class CampoAuth { NOMBRE, APELLIDOS, EMAIL, PASSWORD, CONFIRMACION, EMPRESA
 enum class ErrorAuth {
     EMAIL_EN_USO, CREDENCIALES_INVALIDAS, BLOQUEO_TEMPORAL, DATOS_INVALIDOS, ALMACENAMIENTO,
     SERVICIO_NO_CONFIGURADO, SIN_CONEXION, SERVICIO_NO_DISPONIBLE, PERFIL_NO_DISPONIBLE,
-    VINCULACION_NECESARIA, DEMASIADAS_SOLICITUDES
+    VINCULACION_NECESARIA, DEMASIADAS_SOLICITUDES, PERFIL_SINCRONIZACION_PENDIENTE
 }
 
 sealed interface ResultadoAuth {

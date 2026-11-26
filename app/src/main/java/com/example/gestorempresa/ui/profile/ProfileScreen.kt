@@ -11,6 +11,18 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.platform.LocalContext
+import android.net.Uri
+import com.example.gestorempresa.data.media.AttachmentStorage
+import com.example.gestorempresa.ui.advanced.media.*
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,25 +46,49 @@ import com.example.gestorempresa.ui.profile.components.ProfileInfoSection
 fun ProfileScreen(viewModel: ProfileViewModel, modifier: Modifier = Modifier) {
     val state by viewModel.ui.collectAsStateWithLifecycle()
 
-    // Selector de fotos del sistema: no necesita pedir permisos de almacenamiento.
-    val selectorFoto = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        if (uri != null) viewModel.cambiarFoto(uri.toString())
+    val owner = state.perfil?.usuarioId
+    key(owner) {
+        val context = LocalContext.current
+        val store = remember(context) { PhotoAdjustmentStore(context) }
+        val storage = remember(state.perfil?.empresa?.id) { AttachmentStorage(context, state.perfil?.empresa?.id ?: 0) }
+        val currentProfile by rememberUpdatedState(state.perfil)
+        val scope = rememberCoroutineScope()
+        var sources by remember { mutableStateOf(false) }
+        var preparing by remember { mutableStateOf(false) }
+        var pendingPath by rememberSaveable(owner) { mutableStateOf<String?>(null) }
+        val picker = rememberPhotoPicker(storage) { images ->
+            val id = owner
+            if (id != null && !preparing) scope.launch {
+                preparing = true
+                var prepared: java.io.File? = null
+                try {
+                    prepared = store.prepare(images.first())
+                    if (currentProfile?.usuarioId == id) { pendingPath = prepared.path; prepared = null }
+                } catch (e: CancellationException) { throw e }
+                catch (_: Exception) { viewModel.mostrarErrorFoto() }
+                finally { prepared?.let { store.discard(it.path) }; preparing = false }
+            }
+        }
+        BackHandler(enabled = state.editando) { if (!state.guardando) viewModel.cancelarEdicion() }
+        ProfileContent(state = state.copy(guardando = state.guardando || preparing),
+            onElegirFoto = { if (!preparing && !state.guardando) sources = true },
+            onQuitarFoto = viewModel::eliminarFoto, onEditar = viewModel::empezarEdicion,
+            onCambio = viewModel::editar, onGuardar = viewModel::guardar, onCancelar = viewModel::cancelarEdicion,
+            onMensajeMostrado = viewModel::mensajeMostrado, modifier = modifier)
+        if (sources) PhotoSourceDialog(
+            onCamera = { sources = false; picker.takePhoto() },
+            onGallery = { sources = false; picker.pickFromGallery() },
+            onDismiss = { sources = false })
+        pendingPath?.let { path ->
+            PhotoAdjustmentScreen(path,
+                onConfirm = { cropped ->
+                    pendingPath = null
+                    store.discard(path)
+                    viewModel.cambiarFoto(Uri.fromFile(cropped).toString(), owner) { store.discard(cropped.path) }
+                },
+                onCancel = { pendingPath = null; store.discard(path) })
+        }
     }
-
-    // Si se está editando, el botón Atrás cancela la edición en lugar de salir.
-    BackHandler(enabled = state.editando) { viewModel.cancelarEdicion() }
-
-    ProfileContent(
-        state = state,
-        onElegirFoto = { selectorFoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
-        onQuitarFoto = viewModel::eliminarFoto,
-        onEditar = viewModel::empezarEdicion,
-        onCambio = viewModel::editar,
-        onGuardar = viewModel::guardar,
-        onCancelar = viewModel::cancelarEdicion,
-        onMensajeMostrado = viewModel::mensajeMostrado,
-        modifier = modifier
-    )
 }
 
 /** Dibuja la pantalla a partir del estado. No conoce el ViewModel, por eso se puede previsualizar. */
@@ -99,11 +135,11 @@ fun ProfileContent(
                 if (state.editando) {
                     ProfileEditForm(
                         datos = state.formulario, errores = state.errores, email = perfil.email,
-                        guardando = state.guardando, onCambio = onCambio, onGuardar = onGuardar, onCancelar = onCancelar
+                        guardando = state.guardando, intentoValidacion = state.intentoValidacion, onCambio = onCambio, onGuardar = onGuardar, onCancelar = onCancelar
                     )
                 } else {
                     DatosPerfilSecciones(perfil)
-                    Button(onClick = onEditar, modifier = Modifier.fillMaxWidth()) { Text("Editar perfil") }
+                    Button(onClick = onEditar, modifier = Modifier.fillMaxWidth()) { Text("Editar datos") }
                 }
             }
         }
@@ -121,7 +157,7 @@ private fun CabeceraPerfil(perfil: PerfilAdministrador, guardando: Boolean, onEl
             style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TextButton(onClick = onElegirFoto, enabled = !guardando) { Text(if (perfil.fotoRuta == null) "Añadir foto" else "Cambiar foto") }
+
             if (perfil.fotoRuta != null) TextButton(onClick = onQuitarFoto, enabled = !guardando) { Text("Quitar foto") }
         }
     }
@@ -134,6 +170,7 @@ private fun DatosPerfilSecciones(perfil: PerfilAdministrador) {
         ProfileInfoRow("Nombre", perfil.nombre)
         ProfileInfoRow("Apellidos", perfil.apellidos)
         ProfileInfoRow("Teléfono", perfil.telefono)
+        ProfileInfoRow("Dirección", perfil.direccion)
         ProfileInfoRow("DNI / NIE", perfil.dni)
         ProfileInfoRow("Cargo", perfil.cargo, mostrarSeparador = false)
     }

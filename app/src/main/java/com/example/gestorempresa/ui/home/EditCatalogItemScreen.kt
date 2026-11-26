@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.material3.Button
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.MaterialTheme
@@ -19,20 +21,26 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.gestorempresa.data.local.entities.MaterialEntity
 import com.example.gestorempresa.data.local.entities.ProveedorEntity
 import com.example.gestorempresa.data.local.entities.SubcontratadoEntity
 import com.example.gestorempresa.data.local.entities.UnidadTrabajoEntity
+import com.example.gestorempresa.domain.phone.InternationalPhones
+import kotlinx.coroutines.launch
 
 @Composable
 fun EditCatalogItemScreen(selection: CatalogSelection, state: HomeWorkspaceState, vm: HomeWorkspaceViewModel, onBack: () -> Unit) {
-    val project = state.projects.firstOrNull { it.id == selection.id }
-    val subcontractor = state.subcontractors.firstOrNull { it.id == selection.id }
-    val supplier = state.suppliers.firstOrNull { it.id == selection.id }
-    val material = state.materials.firstOrNull { it.id == selection.id }
+    val project = state.projects.firstOrNull { selection.kind == CatalogKind.PROJECTS && it.id == selection.id }
+    val subcontractor = state.subcontractors.firstOrNull { selection.kind == CatalogKind.SUBCONTRACTORS && it.id == selection.id }
+    val supplier = state.suppliers.firstOrNull { selection.kind == CatalogKind.SUPPLIERS && it.id == selection.id }
+    val material = state.materials.firstOrNull { selection.kind == CatalogKind.MATERIALS && it.id == selection.id }
     var title by remember(selection) { mutableStateOf(project?.titulo ?: subcontractor?.nombreComercial ?: supplier?.nombreEmpresa ?: material?.nombreMaterial.orEmpty()) }
     var client by remember(selection) { mutableStateOf(project?.clienteNombre.orEmpty()) }
     var location by remember(selection) { mutableStateOf(project?.direccionUbicacion.orEmpty()) }
@@ -41,7 +49,13 @@ fun EditCatalogItemScreen(selection: CatalogSelection, state: HomeWorkspaceState
     var type by remember(selection) { mutableStateOf(project?.tipo ?: "SERVICIO") }
     var contact by remember(selection) { mutableStateOf(subcontractor?.personaContacto ?: supplier?.personaContacto.orEmpty()) }
     var tax by remember(selection) { mutableStateOf(subcontractor?.cifDni ?: supplier?.cif.orEmpty()) }
-    var phone by remember(selection) { mutableStateOf(subcontractor?.telefono ?: supplier?.telefono.orEmpty()) }
+    val initialPhone = remember(selection) { InternationalPhones.restore(subcontractor?.telefono ?: supplier?.telefono.orEmpty()) }
+    var phone by rememberSaveable(selection.kind, selection.id) { mutableStateOf(initialPhone.number) }
+    var phoneRegion by rememberSaveable(selection.kind, selection.id) { mutableStateOf(initialPhone.region) }
+    var attemptedPhoneSave by rememberSaveable(selection.kind, selection.id) { mutableStateOf(false) }
+    val phoneFocus = remember { FocusRequester() }
+    val phoneBring = remember { BringIntoViewRequester() }
+    val scope = rememberCoroutineScope()
     var email by remember(selection) { mutableStateOf(subcontractor?.email ?: supplier?.email.orEmpty()) }
     var trade by remember(selection) { mutableStateOf(subcontractor?.oficio.orEmpty()) }
     var amount by remember(selection) { mutableStateOf((subcontractor?.tarifaHoraPorDefecto ?: material?.precioUnitario)?.toString().orEmpty()) }
@@ -82,7 +96,12 @@ fun EditCatalogItemScreen(selection: CatalogSelection, state: HomeWorkspaceState
                 EntryField("Nombre comercial *", title, { title = it }, !saving)
                 EntryField("Persona de contacto", contact, { contact = it }, !saving)
                 EntryField("CIF / DNI", tax, { tax = it }, !saving)
-                EntryField("Teléfono", phone, { phone = it }, !saving)
+                InternationalPhoneField(phoneRegion, phone, {
+                    phoneRegion = it.region; phone = it.number
+                    if (error == "Revisa el teléfono y el prefijo internacional seleccionado.") error = null
+                },
+                    !saving, attemptedPhoneSave, Modifier.focusRequester(phoneFocus).bringIntoViewRequester(phoneBring),
+                    required = false, tagPrefix = "subcontractor-phone")
                 EntryField("Correo electrónico", email, { email = it }, !saving)
                 EntryField("Oficio *", trade, { trade = it }, !saving)
                 EntryField("Tarifa por hora (€)", amount, { amount = it }, !saving)
@@ -91,7 +110,12 @@ fun EditCatalogItemScreen(selection: CatalogSelection, state: HomeWorkspaceState
                 EntryField("Nombre de empresa *", title, { title = it }, !saving)
                 EntryField("Persona de contacto", contact, { contact = it }, !saving)
                 EntryField("CIF", tax, { tax = it }, !saving)
-                EntryField("Teléfono", phone, { phone = it }, !saving)
+                InternationalPhoneField(phoneRegion, phone, {
+                    phoneRegion = it.region; phone = it.number
+                    if (error == "Revisa el teléfono y el prefijo internacional seleccionado.") error = null
+                },
+                    !saving, attemptedPhoneSave, Modifier.focusRequester(phoneFocus).bringIntoViewRequester(phoneBring),
+                    required = false, tagPrefix = "supplier-phone")
                 EntryField("Correo electrónico", email, { email = it }, !saving)
             }
             CatalogKind.MATERIALS -> {
@@ -110,6 +134,7 @@ fun EditCatalogItemScreen(selection: CatalogSelection, state: HomeWorkspaceState
         Button(enabled = recordExists && !saving, modifier = Modifier.fillMaxWidth(), onClick = {
             error = null
             val number = amount.replace(',', '.').toDoubleOrNull()
+            val savedPhone = if (phone.isBlank()) "" else InternationalPhones.toE164(phone, phoneRegion)
             when (kind) {
                 CatalogKind.PROJECTS -> {
                     if (title.isBlank() || location.isBlank() || !validDate(startDate) || (type == "PROYECTO" && endDate.isNotBlank() && (!validDate(endDate) || endDate < startDate))) error = "Revisa el nombre, la ubicación y las fechas."
@@ -117,13 +142,23 @@ fun EditCatalogItemScreen(selection: CatalogSelection, state: HomeWorkspaceState
                         direccionUbicacion = location.trim(), fechaInicio = startDate, fechaFin = if (type == "PROYECTO") endDate.ifBlank { null } else null)) }, onBack)
                 }
                 CatalogKind.SUBCONTRACTORS -> {
+                    attemptedPhoneSave = true
                     if (title.isBlank() || trade.isBlank() || number == null || !number.isFinite() || number < 0) error = "Revisa el nombre, el oficio y la tarifa."
+                    else if (savedPhone == null) {
+                        error = "Revisa el teléfono y el prefijo internacional seleccionado."
+                        scope.launch { phoneFocus.requestFocus(); phoneBring.bringIntoView() }
+                    }
                     else vm.save({ updateSubcontractor(subcontractor!!.copy(nombreComercial = title.trim(), personaContacto = contact.trim(), cifDni = tax.trim(),
-                        telefono = phone.trim(), email = email.trim(), oficio = trade.trim(), tarifaHoraPorDefecto = number)) }, onBack)
+                        telefono = savedPhone, email = email.trim(), oficio = trade.trim(), tarifaHoraPorDefecto = number)) }, onBack)
                 }
                 CatalogKind.SUPPLIERS -> {
+                    attemptedPhoneSave = true
                     if (title.isBlank()) error = "Indica el nombre de la empresa."
-                    else vm.save({ updateSupplier(supplier!!.copy(nombreEmpresa = title.trim(), personaContacto = contact.trim(), cif = tax.trim(), telefono = phone.trim(), email = email.trim())) }, onBack)
+                    else if (savedPhone == null) {
+                        error = "Revisa el teléfono y el prefijo internacional seleccionado."
+                        scope.launch { phoneFocus.requestFocus(); phoneBring.bringIntoView() }
+                    }
+                    else vm.save({ updateSupplier(supplier!!.copy(nombreEmpresa = title.trim(), personaContacto = contact.trim(), cif = tax.trim(), telefono = savedPhone, email = email.trim())) }, onBack)
                 }
                 CatalogKind.MATERIALS -> {
                     if (title.isBlank() || unit.isBlank() || supplierId == null || number == null || !number.isFinite() || number <= 0) error = "Completa nombre, proveedor, unidad y precio válido."

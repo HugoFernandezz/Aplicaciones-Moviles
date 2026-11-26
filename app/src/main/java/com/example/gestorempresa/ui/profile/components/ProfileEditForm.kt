@@ -1,107 +1,81 @@
 package com.example.gestorempresa.ui.profile.components
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.input.*
 import androidx.compose.ui.unit.dp
 import com.example.gestorempresa.domain.auth.AuthValidator
-import com.example.gestorempresa.domain.profile.CampoPerfil
-import com.example.gestorempresa.domain.profile.DatosPerfil
+import com.example.gestorempresa.domain.profile.*
+import com.example.gestorempresa.ui.home.InternationalPhoneField
 
-/**
- * Formulario para modificar el perfil.
- * No guarda nada por sí mismo: avisa con [onCambio] cada vez que el usuario escribe
- * y con [onGuardar] / [onCancelar] al pulsar los botones.
- */
 @Composable
 fun ProfileEditForm(
-    datos: DatosPerfil,
-    errores: Map<CampoPerfil, String>,
-    email: String,
-    guardando: Boolean,
-    onCambio: (DatosPerfil) -> Unit,
-    onGuardar: () -> Unit,
-    onCancelar: () -> Unit
+    datos: DatosPerfil, errores: Map<CampoPerfil, String>, email: String, guardando: Boolean,
+    onCambio: (DatosPerfil) -> Unit, onGuardar: () -> Unit, onCancelar: () -> Unit,
+    intentoValidacion: Int = 0
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text("Datos personales", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-        CampoTexto("Nombre", datos.nombre, errores[CampoPerfil.NOMBRE], guardando) { onCambio(datos.copy(nombre = it)) }
-        CampoTexto("Apellidos", datos.apellidos, errores[CampoPerfil.APELLIDOS], guardando) { onCambio(datos.copy(apellidos = it)) }
-        CampoTexto("Teléfono (opcional)", datos.telefono, errores[CampoPerfil.TELEFONO], guardando, KeyboardType.Phone) { onCambio(datos.copy(telefono = it)) }
-        CampoTexto("DNI / NIE (opcional)", datos.dni, errores[CampoPerfil.DNI], guardando, capitalizar = KeyboardCapitalization.Characters) { onCambio(datos.copy(dni = it)) }
-        CampoTexto("Cargo en la empresa (opcional)", datos.cargo, errores[CampoPerfil.CARGO], guardando) { onCambio(datos.copy(cargo = it)) }
-
-        Text("Empresa", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-        CampoTexto("Nombre de la empresa", datos.empresaNombre, errores[CampoPerfil.EMPRESA], guardando) { onCambio(datos.copy(empresaNombre = it)) }
-        SelectorSector(datos.sector, errores[CampoPerfil.SECTOR], guardando) { onCambio(datos.copy(sector = it)) }
-
-        // El correo identifica la cuenta en el servicio de acceso, por eso no se puede cambiar aquí.
-        OutlinedTextField(
-            value = email, onValueChange = {}, label = { Text("Correo electrónico") },
-            enabled = false, singleLine = true, modifier = Modifier.fillMaxWidth(),
-            supportingText = { Text("El correo de la cuenta no se puede modificar.") }
-        )
-
+    val order = listOf(CampoPerfil.NOMBRE, CampoPerfil.APELLIDOS, CampoPerfil.TELEFONO, CampoPerfil.DIRECCION,
+        CampoPerfil.DNI, CampoPerfil.CARGO, CampoPerfil.EMPRESA, CampoPerfil.SECTOR)
+    val focus = remember { order.associateWith { FocusRequester() } }
+    val bring = remember { order.associateWith { BringIntoViewRequester() } }
+    fun field(c: CampoPerfil) = Modifier.focusRequester(focus.getValue(c)).bringIntoViewRequester(bring.getValue(c))
+    LaunchedEffect(intentoValidacion) {
+        if (intentoValidacion > 0) order.firstOrNull { it in errores }?.let {
+            focus.getValue(it).requestFocus()
+            bring.getValue(it).bringIntoView()
+        }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Mis datos", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+        Text("* Campo obligatorio", style = MaterialTheme.typography.bodySmall)
+        CampoTexto("Nombre *", datos.nombre, errores[CampoPerfil.NOMBRE], guardando, field(CampoPerfil.NOMBRE)) { onCambio(datos.copy(nombre = it)) }
+        CampoTexto("Apellidos *", datos.apellidos, errores[CampoPerfil.APELLIDOS], guardando, field(CampoPerfil.APELLIDOS)) { onCambio(datos.copy(apellidos = it)) }
+        InternationalPhoneField(datos.telefonoRegion, datos.telefono,
+            { onCambio(datos.copy(telefono = it.number, telefonoRegion = it.region)) }, !guardando,
+            CampoPerfil.TELEFONO in errores, field(CampoPerfil.TELEFONO),
+            required = false, tagPrefix = "profile-phone", inline = true)
+        CampoTexto("Dirección (opcional)", datos.direccion, errores[CampoPerfil.DIRECCION], guardando, field(CampoPerfil.DIRECCION)) { onCambio(datos.copy(direccion = it)) }
+        CampoTexto("DNI / NIE (opcional)", datos.dni, errores[CampoPerfil.DNI], guardando, field(CampoPerfil.DNI)) { onCambio(datos.copy(dni = it)) }
+        CampoTexto("Cargo (opcional)", datos.cargo, errores[CampoPerfil.CARGO], guardando, field(CampoPerfil.CARGO)) { onCambio(datos.copy(cargo = it)) }
+        Text("Empresa", style = MaterialTheme.typography.titleMedium)
+        CampoTexto("Nombre de la empresa *", datos.empresaNombre, errores[CampoPerfil.EMPRESA], guardando, field(CampoPerfil.EMPRESA)) { onCambio(datos.copy(empresaNombre = it)) }
+        var expanded by remember { mutableStateOf(false) }
+        val sectorError = errores[CampoPerfil.SECTOR]
+        Box {
+            OutlinedButton(onClick = { expanded = true }, enabled = !guardando, modifier = field(CampoPerfil.SECTOR).fillMaxWidth(),
+                border = BorderStroke(1.dp, if (sectorError != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outline)) {
+                Text(if (datos.sector.isBlank()) "Sector *: seleccionar" else "Sector *: ${datos.sector}")
+            }
+            DropdownMenu(expanded, { expanded = false }) {
+                AuthValidator.sectores.forEach { sector ->
+                    DropdownMenuItem(text = { Text(sector) }, onClick = { onCambio(datos.copy(sector = sector)); expanded = false })
+                }
+            }
+        }
+        sectorError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        OutlinedTextField(email, {}, label = { Text("Correo electrónico") }, readOnly = true, enabled = false,
+            modifier = Modifier.fillMaxWidth(), supportingText = { Text("El correo identifica tu cuenta y no se modifica aquí.") })
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedButton(onClick = onCancelar, enabled = !guardando, modifier = Modifier.weight(1f)) { Text("Cancelar") }
-            Button(onClick = onGuardar, enabled = !guardando, modifier = Modifier.weight(1f)) {
+            Button(onClick = onGuardar, enabled = !guardando, modifier = Modifier.weight(1f).testTag("profile-save")) {
                 Text(if (guardando) "Guardando…" else "Guardar")
             }
         }
     }
 }
 
-/** Campo de texto con su mensaje de error debajo. */
 @Composable
-private fun CampoTexto(
-    etiqueta: String,
-    valor: String,
-    error: String?,
-    bloqueado: Boolean,
-    teclado: KeyboardType = KeyboardType.Text,
-    capitalizar: KeyboardCapitalization = KeyboardCapitalization.Words,
-    onCambio: (String) -> Unit
-) {
-    OutlinedTextField(
-        value = valor, onValueChange = onCambio, label = { Text(etiqueta) },
-        enabled = !bloqueado, singleLine = true, modifier = Modifier.fillMaxWidth(),
-        isError = error != null, supportingText = { if (error != null) Text(error) },
-        keyboardOptions = KeyboardOptions(capitalization = capitalizar, keyboardType = teclado, imeAction = ImeAction.Next)
-    )
-}
-
-/** Desplegable con los mismos sectores que se ofrecen en el Registro. */
-@Composable
-private fun SelectorSector(sector: String, error: String?, bloqueado: Boolean, onElegir: (String) -> Unit) {
-    var abierto by remember { mutableStateOf(false) }
-    Box {
-        OutlinedButton(onClick = { abierto = true }, enabled = !bloqueado, modifier = Modifier.fillMaxWidth()) {
-            Text(if (sector.isEmpty()) "Selecciona el sector" else "Sector: $sector")
-        }
-        DropdownMenu(expanded = abierto, onDismissRequest = { abierto = false }) {
-            AuthValidator.sectores.forEach { opcion ->
-                DropdownMenuItem(text = { Text(opcion) }, onClick = { onElegir(opcion); abierto = false })
-            }
-        }
-    }
-    if (error != null) Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+private fun CampoTexto(label: String, value: String, error: String?, busy: Boolean, modifier: Modifier, onChange: (String) -> Unit) {
+    OutlinedTextField(value, onChange, label = { Text(label) }, enabled = !busy, singleLine = true,
+        isError = error != null, supportingText = { error?.let { Text(it) } },
+        modifier = modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next))
 }

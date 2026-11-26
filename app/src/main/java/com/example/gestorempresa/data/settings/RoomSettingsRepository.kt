@@ -21,6 +21,7 @@ class RoomSettingsRepository @Inject constructor(db: AppDatabase) : SettingsRepo
         dao.observarAjustes(usuarioId).map { it?.toDomain() ?: AjustesApp() }
 
     override suspend fun guardarAjustes(usuarioId: Long, ajustes: AjustesApp) {
+        require(ajustes.diasAntelacion in AjustesApp.opcionesAntelacion) { "Antelación no válida" }
         dao.guardarAjustes(ajustes.toEntity(usuarioId))
     }
 }

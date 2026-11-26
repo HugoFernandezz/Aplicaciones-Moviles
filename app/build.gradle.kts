@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -12,6 +14,10 @@ plugins {
 val authEmulatorHost = providers.gradleProperty("firebaseAuthEmulatorHost").orElse("").get()
 // Las pruebas de UI usan otra aplicación para que su desinstalación no borre datos de desarrollo.
 val homeUiTests = providers.gradleProperty("homeUiTests").orElse("false").get().toBoolean()
+// Opt-in local: una CA de desarrollo ya confiable en Windows, nunca incluida en Release.
+val localDebugTls = Properties().apply {
+    rootProject.file("local.properties").takeIf { it.isFile }?.inputStream()?.use { load(it) }
+}.getProperty("debug.trustedCa", "false").toBoolean()
 if (file("google-services.json").isFile && authEmulatorHost.isBlank() && !homeUiTests) apply(plugin = "com.google.gms.google-services")
 
 android {
@@ -34,6 +40,7 @@ android {
             val host = authEmulatorHost
             require(host.matches(Regex("[A-Za-z0-9.:-]*"))) { "Host de pruebas no válido" }
             buildConfigField("String", "AUTH_EMULATOR_HOST", "\"$host\"")
+            manifestPlaceholders["authEmulatorCleartext"] = host.isNotBlank().toString()
             if (host.isNotBlank()) {
                 applicationIdSuffix = ".pruebas"
                 versionNameSuffix = "-pruebas"
@@ -54,6 +61,16 @@ android {
     kotlinOptions { jvmTarget = "17" }
     testOptions { unitTests.isIncludeAndroidResources = true }
     sourceSets.getByName("test").resources.srcDir("$projectDir/schemas")
+    if (localDebugTls && authEmulatorHost.isBlank()) {
+        val localTls = rootProject.file(".local/debug-tls")
+        require(localTls.resolve("res/raw/local_development_ca.cer").isFile && localTls.resolve("AndroidManifest.xml").isFile) {
+            "Ejecuta tools/configure-local-debug-ca.ps1 con la huella de la CA de desarrollo o desactiva debug.trustedCa en local.properties."
+        }
+        sourceSets.getByName("debug").apply {
+            manifest.srcFile(localTls.resolve("AndroidManifest.xml"))
+            res.srcDir(localTls.resolve("res"))
+        }
+    }
     buildFeatures {
         compose = true
         buildConfig = true
@@ -75,6 +92,8 @@ tasks.configureEach {
 dependencies {
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
+    implementation(libs.firebase.firestore)
+    implementation(libs.libphonenumber)
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)

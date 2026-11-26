@@ -1,10 +1,6 @@
 package com.example.gestorempresa.ui.advanced.media
 
 import android.content.ActivityNotFoundException
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.Matrix
-import android.media.ExifInterface
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -20,6 +16,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -31,6 +28,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import com.example.gestorempresa.data.media.AttachmentStorage
+import com.example.gestorempresa.data.media.decodePhotoBitmap
 import com.example.gestorempresa.data.media.StoredFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -61,18 +59,19 @@ class PhotoPicker internal constructor(val takePhoto: () -> Unit, val pickFromGa
 @Composable
 fun rememberPhotoPicker(storage: AttachmentStorage, multiple: Boolean = false, onPhotos: (List<PhotoSource>) -> Unit): PhotoPicker {
     val context = LocalContext.current
+    val latestOnPhotos by rememberUpdatedState(onPhotos)
     // Se guarda la ruta para no perderla si Android cierra la app mientras la cámara está abierta.
     var pendingCameraPath by rememberSaveable { mutableStateOf<String?>(null) }
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
         val file = pendingCameraPath?.let(::File)
         pendingCameraPath = null
-        if (ok && file != null) onPhotos(listOf(PhotoSource.Camera(file))) else file?.delete()
+        if (ok && file != null) latestOnPhotos(listOf(PhotoSource.Camera(file))) else file?.delete()
     }
     val single = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        if (uri != null) onPhotos(listOf(PhotoSource.Gallery(uri)))
+        if (uri != null) latestOnPhotos(listOf(PhotoSource.Gallery(uri)))
     }
     val many = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(10)) { uris ->
-        if (uris.isNotEmpty()) onPhotos(uris.map { PhotoSource.Gallery(it) })
+        if (uris.isNotEmpty()) latestOnPhotos(uris.map { PhotoSource.Gallery(it) })
     }
     return remember(storage, multiple) {
         PhotoPicker(
@@ -81,12 +80,14 @@ fun rememberPhotoPicker(storage: AttachmentStorage, multiple: Boolean = false, o
                 pendingCameraPath = file.absolutePath
                 try { camera.launch(uri) } catch (_: ActivityNotFoundException) {
                     pendingCameraPath = null
+                    file.delete()
                     Toast.makeText(context, "No hay ninguna app de cámara disponible", Toast.LENGTH_SHORT).show()
                 }
             },
             pickFromGallery = {
                 val request = PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                if (multiple) many.launch(request) else single.launch(request)
+                try { if (multiple) many.launch(request) else single.launch(request) }
+                catch (_: ActivityNotFoundException) { Toast.makeText(context, "No hay ningún selector de imágenes disponible", Toast.LENGTH_SHORT).show() }
             }
         )
     }
@@ -111,24 +112,4 @@ fun LocalImage(path: String?, contentDescription: String?, modifier: Modifier = 
  * Lee una imagen reduciendo su tamaño (una foto de móvil puede medir 4000 px)
  * y la gira según la orientación con la que se hizo la foto (datos EXIF).
  */
-fun decodeImage(path: String, maxSide: Int): ImageBitmap? = try {
-    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    BitmapFactory.decodeFile(path, bounds)
-    var sample = 1
-    while (bounds.outWidth / (sample * 2) >= maxSide && bounds.outHeight / (sample * 2) >= maxSide) sample *= 2
-    val bitmap = BitmapFactory.decodeFile(path, BitmapFactory.Options().apply { inSampleSize = sample })
-    bitmap?.let { rotateFromExif(path, it).asImageBitmap() }
-} catch (_: Exception) { null }
-
-private fun rotateFromExif(path: String, bitmap: Bitmap): Bitmap {
-    val degrees = try {
-        when (ExifInterface(path).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
-            ExifInterface.ORIENTATION_ROTATE_90 -> 90f
-            ExifInterface.ORIENTATION_ROTATE_180 -> 180f
-            ExifInterface.ORIENTATION_ROTATE_270 -> 270f
-            else -> 0f
-        }
-    } catch (_: Exception) { 0f }
-    if (degrees == 0f) return bitmap
-    return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, Matrix().apply { postRotate(degrees) }, true)
-}
+fun decodeImage(path: String, maxSide: Int): ImageBitmap? = decodePhotoBitmap(path, maxSide)?.asImageBitmap()

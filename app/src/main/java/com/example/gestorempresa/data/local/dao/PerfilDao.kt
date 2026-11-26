@@ -12,12 +12,12 @@ import kotlinx.coroutines.flow.Flow
 data class PerfilRelacion(
     val usuarioId: Long, val nombre: String, val apellidos: String, val email: String, val rol: String,
     val telefono: String, val dni: String, val cargo: String, val fotoRuta: String?,
-    val empresaId: Long, val nombreEmpresa: String, val sector: String
+    val empresaId: Long, val nombreEmpresa: String, val sector: String, val remoteId: String?, val direccion: String, val telefonoRegion: String?
 ) {
     fun toDomain() = PerfilAdministrador(
         usuarioId = usuarioId, nombre = nombre, apellidos = apellidos, email = email, rol = rol,
         telefono = telefono, dni = dni, cargo = cargo, fotoRuta = fotoRuta,
-        empresa = Empresa(empresaId, nombreEmpresa, sector)
+        empresa = Empresa(empresaId, nombreEmpresa, sector, remoteId), direccion = direccion, telefonoRegion = telefonoRegion
     )
 }
 
@@ -32,7 +32,7 @@ interface PerfilDao {
         SELECT u.id AS usuarioId, u.nombre, u.apellidos, u.email, u.rol,
                COALESCE(p.telefono, '') AS telefono, COALESCE(p.dni, '') AS dni,
                COALESCE(p.cargo, '') AS cargo, p.fotoRuta,
-               e.id AS empresaId, e.nombre AS nombreEmpresa, e.sector
+               e.id AS empresaId, e.nombre AS nombreEmpresa, e.sector, e.remoteId, COALESCE(p.direccion, '') AS direccion, p.telefonoRegion
         FROM usuarios u
         JOIN empresas e ON u.empresaId = e.id
         LEFT JOIN perfiles p ON p.usuarioId = u.id

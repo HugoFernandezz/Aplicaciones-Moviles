@@ -3,21 +3,32 @@ package com.example.gestorempresa.ui.home
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.gestorempresa.data.local.*
 import com.example.gestorempresa.data.local.entities.*
+import com.example.gestorempresa.domain.phone.InternationalPhones
 import java.time.LocalDate
+import kotlinx.coroutines.launch
 
 @Composable fun ModuleRecordForm(route: String, state: HomeWorkspaceState, vm: HomeWorkspaceViewModel, initialSupplierId: Long? = null, onBack: () -> Unit) {
     key(route, initialSupplierId) {
         var title by rememberSaveable { mutableStateOf("") }
         var contact by rememberSaveable { mutableStateOf("") }
         var phone by rememberSaveable { mutableStateOf("") }
+        var phoneRegion by rememberSaveable { mutableStateOf("ES") }
+        var attemptedPhoneSave by rememberSaveable { mutableStateOf(false) }
+        val phoneFocus = remember { FocusRequester() }
+        val phoneBring = remember { BringIntoViewRequester() }
+        val scope = rememberCoroutineScope()
         var email by rememberSaveable { mutableStateOf("") }
         var tax by rememberSaveable { mutableStateOf("") }
         var trade by rememberSaveable { mutableStateOf("") }
@@ -49,7 +60,12 @@ import java.time.LocalDate
                     EntryField("Nombre comercial / empresa *", title, { title = it }, !saving)
                     EntryField("Persona de contacto", contact, { contact = it }, !saving)
                     EntryField("CIF / DNI", tax, { tax = it }, !saving)
-                    EntryField("Teléfono", phone, { phone = it }, !saving)
+                    InternationalPhoneField(phoneRegion, phone, {
+                        phoneRegion = it.region; phone = it.number
+                        if (error == "Revisa el teléfono y el prefijo internacional seleccionado.") error = null
+                    },
+                        !saving, attemptedPhoneSave, Modifier.focusRequester(phoneFocus).bringIntoViewRequester(phoneBring),
+                        required = false, tagPrefix = if (route == "supplier-new") "supplier-phone" else "subcontractor-phone")
                     EntryField("Correo", email, { email = it }, !saving)
                     if (route == "subcontractor-new") {
                         EntryField("Oficio *", trade, { trade = it }, !saving)
@@ -117,13 +133,18 @@ import java.time.LocalDate
                 val cents = if (amount.trim() == "0" || amount.trim() == "0,00" || amount.trim() == "0.00") 0L else moneyCents(amount)
                 when (route) {
                     "subcontractor-new", "supplier-new" -> {
+                        attemptedPhoneSave = true
+                        val savedPhone = if (phone.isBlank()) "" else InternationalPhones.toE164(phone, phoneRegion)
                         if (title.isBlank() || (route == "subcontractor-new" && trade.isBlank())) error = "Completa los campos obligatorios."
                         else if (email.isNotBlank() && !android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) error = "Revisa el correo."
-                    else if (phone.isNotBlank() && phone.length !in 9..15) error = "El teléfono debe tener entre 9 y 15 dígitos."
+                        else if (savedPhone == null) {
+                            error = "Revisa el teléfono y el prefijo internacional seleccionado."
+                            scope.launch { phoneFocus.requestFocus(); phoneBring.bringIntoView() }
+                        }
                     else if (route == "subcontractor-new" && cents == null) error = "La tarifa debe ser positiva o cero, con hasta dos decimales."
                         else vm.save({
-                            if (route == "supplier-new") addSupplier(ProveedorEntity(nombreEmpresa = title.trim(), cif = tax.trim(), telefono = phone.trim(), email = email.trim(), personaContacto = contact.trim()))
-                            else addSubcontractor(SubcontratadoEntity(nombreComercial = title.trim(), personaContacto = contact.trim(), cifDni = tax.trim(), telefono = phone.trim(), email = email.trim(), oficio = trade.trim(), tarifaHoraPorDefecto = cents!! / 100.0))
+                            if (route == "supplier-new") addSupplier(ProveedorEntity(nombreEmpresa = title.trim(), cif = tax.trim(), telefono = savedPhone, email = email.trim(), personaContacto = contact.trim()))
+                            else addSubcontractor(SubcontratadoEntity(nombreComercial = title.trim(), personaContacto = contact.trim(), cifDni = tax.trim(), telefono = savedPhone, email = email.trim(), oficio = trade.trim(), tarifaHoraPorDefecto = cents!! / 100.0))
                         }, onBack)
                     }
                     "material-new" -> {
