@@ -1,5 +1,7 @@
 # Incidencia de acceso y certificado — 26/11/2026
 
+**Entrega final sin cambios de pruebas:** por petición de la usuaria, las pruebas y sus modificaciones se excluyen del repositorio. Se conserva una copia local ignorada en `.local/excluded-tests/`. Los resultados y comandos siguientes documentan las ejecuciones previas a su exclusión. La reparación de acceso, la configuración local de confianza y las reglas de seguridad se mantienen.
+
 ## Causas comprobadas
 
 1. Firebase Authentication devolvía `CertPathValidatorException: Trust anchor for certification path not found`. El mensaje general de la interfaz no identificaba la causa de transporte. Se reprodujo con el SDK real en Android, sin usar una cuenta personal.

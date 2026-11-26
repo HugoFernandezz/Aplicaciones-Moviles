@@ -27,7 +27,11 @@
 - `app/src/androidTest/java/com/example/gestorempresa/phone/CatalogPhoneUiTest.kt`.
 - Este informe.
 
-## Verificación
+## Exclusión de pruebas de la entrega
+
+Por petición de la usuaria, los archivos nuevos y las modificaciones de pruebas se excluyen de la entrega final. Se conserva una copia local ignorada en `.local/excluded-tests/`. Las listas de archivos de prueba, resultados y comandos de este informe describen las comprobaciones anteriores a esa exclusión; las correcciones de la aplicación se mantienen.
+
+## Verificación histórica
 
 - Compilación normal `assembleDebug`: superada.
 - Suite unitaria completa `testDebugUnitTest`: **131/131**, sin fallos, errores ni pruebas omitidas, incluidos los tres casos nuevos de DNI/NIE. Se repitió tras sustituir los ejemplos iniciales por el ejemplo público del Ministerio.

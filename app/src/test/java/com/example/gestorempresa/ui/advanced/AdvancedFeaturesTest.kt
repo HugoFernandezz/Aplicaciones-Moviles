@@ -56,9 +56,6 @@ class AdvancedFeaturesTest {
         assertEquals("34600111222", whatsappNumber("600 111 222"))
         assertEquals("34600111222", whatsappNumber("+34 600-111-222"))
         assertEquals("34600111222", whatsappNumber("0034600111222"))
-        assertEquals("298211234", whatsappNumber("+298 211234"))
-        assertEquals("298211234", whatsappNumber("00298 211234"))
-        assertEquals("4532123456", whatsappNumber("+45 32123456"))
         assertNull(whatsappNumber("123"))
     }
 

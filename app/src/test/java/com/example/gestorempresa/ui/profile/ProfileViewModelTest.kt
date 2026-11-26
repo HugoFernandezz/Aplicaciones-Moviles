@@ -45,29 +45,6 @@ private class FakeProfileRepository(empresa: Empresa) : ProfileRepository {
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ProfileViewModelTest {
-    @Test fun salirDeLaCuentaLimpiaFormularioFotoYErrores() = runTest {
-        viewModel.empezarEdicion()
-        viewModel.editar(viewModel.ui.value.formulario.copy(nombre = "Borrador"))
-        viewModel.cambiarFoto("content://foto")
-        auth.sesion.value = null
-        assertNull(viewModel.ui.value.perfil)
-        assertFalse(viewModel.ui.value.editando)
-        assertEquals(DatosPerfil(), viewModel.ui.value.formulario)
-        assertTrue(viewModel.ui.value.errores.isEmpty())
-    }
-    @Test fun cambiarUnCampoNoBorraLosErroresDeLosDemas() = runTest {
-        viewModel.empezarEdicion()
-        viewModel.editar(DatosPerfil())
-        viewModel.guardar()
-        assertEquals(1, viewModel.ui.value.intentoValidacion)
-        viewModel.editar(viewModel.ui.value.formulario.copy(nombre = "Ana"))
-        assertFalse(com.example.gestorempresa.domain.profile.CampoPerfil.NOMBRE in viewModel.ui.value.errores)
-        assertTrue(com.example.gestorempresa.domain.profile.CampoPerfil.EMPRESA in viewModel.ui.value.errores)
-    }
-    @Test fun fotoDeUnSelectorAnteriorNoSeAsignaATraCuenta() = runTest {
-        viewModel.cambiarFoto("content://foto", usuarioEsperado = 99)
-        assertNull(viewModel.ui.value.perfil?.fotoRuta)
-    }
     private val auth = FakeAuthRepository()
     private val repositorio = FakeProfileRepository(auth.empresa)
     private lateinit var viewModel: ProfileViewModel

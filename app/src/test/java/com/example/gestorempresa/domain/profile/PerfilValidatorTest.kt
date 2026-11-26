@@ -4,27 +4,6 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class PerfilValidatorTest {
-    @Test fun telefonoInternacionalNoNecesitaNueveDigitosNacionales() {
-        val input = DatosPerfil("Ana", "Pérez", "32123456", "", "", "Empresa", "Limpieza", telefonoRegion = "DK")
-        assertTrue(PerfilValidator.validar(input).isEmpty())
-        assertEquals("+4532123456", PerfilValidator.normalizar(input).telefono)
-    }
-    @Test fun editarOtrosDatosConservaElPrefijoDelPerfil() {
-        val perfil = PerfilAdministrador(1, "Ana", "Pérez", "a@empresa.es", "ADMIN", "+442079460018", "", "", null,
-            com.example.gestorempresa.domain.auth.Empresa(1, "Empresa", "Limpieza"))
-        val input = perfil.toDatosPerfil().copy(nombre = "Andrea", direccion = "Calle Mayor 1")
-        assertEquals("GB", input.telefonoRegion)
-        assertEquals("+442079460018", PerfilValidator.normalizar(input).telefono)
-    }
-    @Test fun laSeleccionDePaisSeConservaInclusoSinTelefono() {
-        val perfil = PerfilAdministrador(1, "Ana", "Pérez", "a@empresa.es", "ADMIN", "", "", "", null,
-            com.example.gestorempresa.domain.auth.Empresa(1, "Empresa", "Limpieza"), telefonoRegion = "DK")
-        assertEquals("DK", perfil.toDatosPerfil().telefonoRegion)
-    }
-    @Test fun direccionTieneUnLimiteYSeNormaliza() {
-        assertTrue(CampoPerfil.DIRECCION in PerfilValidator.validar(DatosPerfil(direccion = "x".repeat(241))))
-        assertEquals("Calle Mayor 1", PerfilValidator.normalizar(DatosPerfil(direccion = " Calle Mayor 1 ")).direccion)
-    }
     private val validos = DatosPerfil(
         nombre = "Juan", apellidos = "Pérez López", telefono = "+34 600 123 456",
         dni = "12345678Z", cargo = "Gerente", empresaNombre = "Construcciones Murcia", sector = "Construcción"

@@ -1,5 +1,7 @@
 # Perfil y Ajustes — revisión del miembro 4
 
+**Entrega final sin cambios de pruebas:** por petición de la usuaria, se excluyen los archivos de pruebas añadidos y nuestras modificaciones de las pruebas existentes. Se conserva una copia local ignorada en `.local/excluded-tests/`. Los resultados, comandos y listas de pruebas de este informe corresponden a la verificación anterior a esa exclusión. El código de Perfil y Ajustes se mantiene.
+
 Trabajo sobre `codex/auth-multidispositivo`, en el worktree `auth-multidispositivo`, conservando la autenticación y los teléfonos de empleados implementados anteriormente.
 
 ## Errores detectados y corregidos
@@ -50,6 +52,8 @@ Fotos y preferencias son locales por usuario en cada instalación. No se ha aña
 | Android: Perfil y teléfonos de empleados | **9/9 aprobadas** en API 36: 6 de Perfil y 3 de regresión de empleados. Registro en `build/entrega/profile-test-results.log`. |
 | Reglas de Firestore | **6/6 aprobadas** con `demo-gestor-empresa`: compatibilidad con documentos antiguos, propietario frente a otras cuentas/anónimo y nuevos campos de dirección/país. No despliega reglas al proyecto real. |
 
+El resultado de las reglas corresponde a la verificación histórica. Por petición de la usuaria, la carpeta `tools/firebase-tests/` ya no se incluye en el repositorio; se conservan las reglas de seguridad de la aplicación.
+
 El informe unitario completo está en `build/entrega/unit-tests/index.html`. Las pruebas añadidas cubren geometría de recorte, migración 6 → 7, restauración de datos y fotografía, país opcional, dirección, aislamiento por usuario, guardados rápidos, errores y cambio de sesión.
 
 En Android se verifican: lápiz → Cámara/Galería; selección temporal sin sobrescribir la imagen anterior; cancelación; arrastre y zoom con comprobación del color de los píxeles del recorte guardado; JPEG de 768 × 768; giro y espejo EXIF; foto del menú reactiva y aislada por cuenta; validación con foco y desplazamiento; confirmación visual; conservación de teléfono +44 y país al editar dirección; todos los accesos del menú y desaparición de las pantallas privadas al cerrar sesión. La primera ejecución detectó una espera ausente en la prueba al pulsar Editar durante el mensaje de confirmación; se añadió la espera y la ejecución conjunta final pasa completa.
@@ -62,7 +66,6 @@ Comandos principales:
 .\gradlew.bat testDebugUnitTest assembleDebug lintDebug
 .\gradlew.bat assembleDebug assembleDebugAndroidTest '-PhomeUiTests=true' '-PfocusedAndroidTests=profile,phone' -I tools/auth-tests.init.gradle
 adb -s emulator-5580 shell am instrument -w -r -e class com.example.gestorempresa.profile.ProfileFlowsUiTest,com.example.gestorempresa.phone.EmployeePhoneUiTest com.example.gestorempresa.uitests.test/androidx.test.runner.AndroidJUnitRunner
-.\tools\firebase-tests\node_modules\.bin\firebase.cmd emulators:exec --project demo-gestor-empresa --only firestore "node tools/firebase-tests/rules.test.mjs"
 ```
 
 En este equipo se utiliza JDK 17, el almacén de certificados de Windows y el init script local de Robolectric, como se explica en la revisión de autenticación. La salida se dirige a `android-profile-build` fuera de OneDrive. Los APK de interfaz usan `com.example.gestorempresa.uitests`; el emulador se inicia en modo de solo lectura. El APK de entrega normal se conserva aparte en `build/entrega/gestor-empresa-debug.apk`.
@@ -88,7 +91,7 @@ El init script limita las fuentes de tests Android porque `HomeModuleUiTest` de 
 - `ui/advanced/media/PhotoComponents.kt`, `PhotoAdjustmentScreen.kt`, `PhotoAdjustmentStore.kt`.
 - `data/media/ImageDecoding.kt`, `CropFrame.kt`, `ui/advanced/dates/DueDateNotifications.kt`.
 - `domain/auth/PerfilCuentaService.kt`, `data/auth/FirestorePerfilCuentaService.kt`, `FirebaseAuthRepository.kt`, `firestore.rules`.
-- Tests: `PerfilValidatorTest`, `CropFrameTest`, `ProfileViewModelTest`, `SettingsViewModelTest`, `ProfileRepositoryTest`, `DatabaseMigrationTest`, `MultidispositivoTest`, `ProfileFlowsUiTest` y `tools/firebase-tests/rules.test.mjs`.
+- Tests: `PerfilValidatorTest`, `CropFrameTest`, `ProfileViewModelTest`, `SettingsViewModelTest`, `ProfileRepositoryTest`, `DatabaseMigrationTest`, `MultidispositivoTest` y `ProfileFlowsUiTest`.
 - `tools/auth-tests.init.gradle` y este informe. Rutas Kotlin relativas a `app/src/main/java/com/example/gestorempresa`; tests en sus carpetas correspondientes.
 
 Referencias: [selector oficial de fotos](https://developer.android.com/training/data-storage/shared/photo-picker), [gestos multitáctiles de Compose](https://developer.android.com/develop/ui/compose/touch-input/pointer-input/multi-touch), [reglas de Firestore](https://firebase.google.com/docs/firestore/security/rules-conditions).

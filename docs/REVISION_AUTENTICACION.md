@@ -68,7 +68,11 @@ Referencias: [biblioteca oficial de Google](https://github.com/google/libphonenu
 
 Actualización del 26/11/2026: con confirmación expresa se creó Cloud Firestore Standard `(default)` en `europe-southwest1` (Madrid), proyecto `gestor-empresa-74d8b`, manteniendo Spark y sin habilitar extras de pago. Se publicaron las reglas de `firestore.rules`, verificando la versión activa en la consola. El acceso anónimo al documento de diagnóstico devuelve `403 Missing or insufficient permissions`; la API ya no devuelve servicio desactivado. Se conserva el mismo proveedor y proyecto de Authentication. El diagnóstico y la corrección del certificado del emulador se documentan en [INCIDENCIA_ACCESO.md](INCIDENCIA_ACCESO.md).
 
-## Verificación
+## Exclusión de pruebas de la entrega
+
+Por petición de la usuaria, se retiran de la entrega todos los archivos de pruebas añadidos durante esta revisión, los cambios realizados en las pruebas existentes y las herramientas de prueba asociadas. Se conserva una copia local en `.local/excluded-tests/`, ignorada por Git. Las pruebas previas del repositorio se mantienen sin nuestras modificaciones. Los resultados, comandos y listas de pruebas de este informe documentan las ejecuciones anteriores a esta exclusión; no describen una suite nueva incluida en la entrega final. Se conservan el código de la aplicación, los esquemas de producción 6 y 7 y las reglas de seguridad.
+
+## Verificación histórica
 
 Resultados obtenidos en esta tarea:
 
@@ -92,11 +96,11 @@ Comandos reproducibles:
 ```powershell
 .\gradlew.bat testDebugUnitTest assembleDebug lintDebug
 .\gradlew.bat assembleDebugAndroidTest '-PhomeUiTests=true' '-PfirebaseAuthEmulatorHost=10.0.2.2' -I tools/auth-tests.init.gradle
-npm install --prefix tools/firebase-tests
-.\tools\firebase-tests\node_modules\.bin\firebase.cmd emulators:exec --project demo-gestor-empresa --only firestore "node tools/firebase-tests/rules.test.mjs"
 ```
 
-El emulador Firestore usa 8080 y Auth 9099. Para pruebas Android contra ambos: `-PfirebaseAuthEmulatorHost=10.0.2.2`; nunca usar esta configuración en APK de producción. Los tests de interfaz usan el paquete `.uitests` para proteger los datos de desarrollo. El script de reglas debe ejecutarse desde la raíz del proyecto.
+El emulador Firestore usa 8080 y Auth 9099. Para pruebas Android contra ambos: `-PfirebaseAuthEmulatorHost=10.0.2.2`; nunca usar esta configuración en APK de producción. Los tests de interfaz usan el paquete `.uitests` para proteger los datos de desarrollo.
+
+Por petición de la usuaria, la carpeta de pruebas `tools/firebase-tests/` se excluye del repositorio. Los resultados de reglas indicados arriba corresponden a las comprobaciones realizadas antes de retirarla. Se mantienen las reglas de seguridad de la aplicación en `firestore.rules`.
 
 La variante instrumentada usa exactamente `com.example.gestorempresa.uitests.pruebas`. Para ejecutar las dos clases con ambos emuladores arrancados:
 
@@ -198,8 +202,6 @@ Rutas relativas a la carpeta `auth-multidispositivo`. Los artefactos de compilac
 - `firestore.rules`
 - `gradle/libs.versions.toml`
 - `tools/auth-tests.init.gradle`
-- `tools/firebase-tests/package.json`
-- `tools/firebase-tests/rules.test.mjs`
 
 Archivos de la ampliación de teléfonos de empleados (además de las dependencias Gradle y el selector de tests ya enumerados):
 
