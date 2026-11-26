@@ -2,6 +2,7 @@
 .gradle
 .firebase/
 **/node_modules/
+/tools/firebase-tests/package-lock.json
 firebase-debug.log
 firestore-debug.log
 .kotlin/

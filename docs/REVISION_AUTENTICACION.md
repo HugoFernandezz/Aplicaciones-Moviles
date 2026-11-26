@@ -197,7 +197,6 @@ Rutas relativas a la carpeta `auth-multidispositivo`. Los artefactos de compilac
 - `firebase.json`
 - `firestore.rules`
 - `gradle/libs.versions.toml`
-- `tools/firebase-tests/package-lock.json`
 - `tools/auth-tests.init.gradle`
 - `tools/firebase-tests/package.json`
 - `tools/firebase-tests/rules.test.mjs`
