@@ -35,7 +35,7 @@ import kotlinx.coroutines.launch
 /** El miembro 3 recibe tipo e id mediante onOpenDetails, sin duplicar sus pantallas. */
 @Composable
 fun HomeListsContent(session: SesionUsuario, modifier: Modifier = Modifier,
-    onOpenDetails: ((CatalogSelection) -> Unit)? = null, warnDays: Int = 15, resetHomeSignal: Int = 0, onNotifyNow: () -> Unit = {},
+    onOpenDetails: ((CatalogSelection) -> Unit)? = null, warnDays: Int = 15, resetHomeSignal: Int = 0, onNotifyNow: () -> Unit = {}, notifyExpiries: Boolean = true, notifyTasks: Boolean = true,
     perfil: PerfilAdministrador? = null, menuUsuario: List<OpcionMenu> = emptyList(), onUserNavigation: ((String) -> Unit)? = null) {
     val context = LocalContext.current.applicationContext
     val companyId = session.empresa.id
@@ -222,7 +222,7 @@ fun HomeListsContent(session: SesionUsuario, modifier: Modifier = Modifier,
                                 onOpenProject = { selectedDetail = CatalogSelection(CatalogKind.PROJECTS, it) },
                                 onPickLocation = { pickingLocationId = it })
                             destination == "stats" -> StatsScreen(state)
-                            destination == "calendar" -> CalendarScreen(state, warnDays, onOpen = { selectedDetail = it }, onNotifyNow = onNotifyNow)
+                            destination == "calendar" -> CalendarScreen(state, warnDays, onOpen = { selectedDetail = it }, onNotifyNow = onNotifyNow, templates = templates, includeExpiries = notifyExpiries, includeTasks = notifyTasks)
                             kind != null -> CatalogScreen(kind, state, workspace, { navigate("home") }, ::navigate,
                                 onSelect = { selection -> if (onOpenDetails != null) onOpenDetails(selection) else selectedDetail = selection },
                                 onEditEmployee = { employeeId -> editingEmployeeId = employeeId; editingFromDetailId = null; navigate("employee-edit") })

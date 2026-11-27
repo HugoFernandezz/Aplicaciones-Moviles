@@ -11,6 +11,7 @@ import com.example.gestorempresa.ui.advanced.dates.DueKind
 import com.example.gestorempresa.ui.advanced.dates.DueStatus
 import com.example.gestorempresa.ui.advanced.dates.dueItems
 import com.example.gestorempresa.ui.advanced.dates.dueOverview
+import com.example.gestorempresa.ui.advanced.dates.contactFor
 import com.example.gestorempresa.ui.advanced.dates.pendingWarnings
 import com.example.gestorempresa.ui.advanced.stats.monthlyValues
 import com.example.gestorempresa.ui.advanced.stats.projectCosts
@@ -148,5 +149,31 @@ class DueOverviewTest {
         assertEquals(DueStatus.VENCIDO, task.status(today, 15))
         val future = state.copy(tasks = listOf(HomeTask(2, "Futura", 1, "2027-01-01"))).dueItems().single { it.kind == DueKind.TAREA }
         assertEquals(DueStatus.PROGRAMADO, future.status(today, 15))
+    }
+}
+
+class NotifyNowTest {
+    private val today = java.time.LocalDate.parse("2026-11-21")
+    private val employee = EmpleadoEntity(id = 7, nombre = "Juan", apellidos = "Pérez", dni = "", telefono = "600111222", email = "j@example.com",
+        oficio = "Albañil", tipoEmpleado = "COMPLETO", salarioBase = 0.0, lugarResidencia = "", direccionPersonal = "")
+    private val state = HomeWorkspaceState(employees = listOf(employee), obligations = listOf(
+        HomeObligation(1, "CURSO", "PRL 20h", "EMPLEADO", 7, "2026-11-25"),
+        HomeObligation(2, "MEDICO", "Revisión anual", "EMPLEADO", 7, "2026-11-20")))
+
+    @Test fun preparesAMessageForTheAffectedWorker() {
+        val items = state.dueItems()
+        val course = items.single { it.title == "PRL 20h" }
+        assertEquals("Juan Pérez", state.contactFor(course)?.name)
+        assertEquals("Curso próximo a caducar" to mapOf("CURSO" to "PRL 20h", "FECHA" to "2026-11-25"),
+            com.example.gestorempresa.ui.advanced.dates.dueMessagePreset(course))
+        assertEquals("Reconocimiento médico", com.example.gestorempresa.ui.advanced.dates.dueMessagePreset(items.single { it.title == "Revisión anual" }).first)
+    }
+
+    @Test fun previewTextIsTheSameAsTheNotification() {
+        val items = state.pendingWarnings(today, 15, includeExpiries = true, includeTasks = true)
+        val content = com.example.gestorempresa.ui.advanced.dates.DueDateNotifications.content(items, today, 15)
+        assertEquals("1 vencido · 1 próximo", content.title)
+        assertEquals(listOf("2026-11-20 · Revisión anual (Juan Pérez)", "2026-11-25 · PRL 20h (Juan Pérez)"), content.lines)
+        assertTrue(state.pendingWarnings(today, 15, includeExpiries = false, includeTasks = false).isEmpty())
     }
 }

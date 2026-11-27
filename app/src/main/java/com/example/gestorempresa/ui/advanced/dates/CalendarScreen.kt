@@ -43,7 +43,11 @@ fun statusColor(status: DueStatus): Color = when (status) {
  */
 @Composable
 fun CalendarScreen(state: HomeWorkspaceState, warnDays: Int, onOpen: (CatalogSelection) -> Unit, onNotifyNow: () -> Unit,
+    templates: com.example.gestorempresa.ui.advanced.communication.MessageTemplateStore, includeExpiries: Boolean = true, includeTasks: Boolean = true,
     modifier: Modifier = Modifier, today: LocalDate = LocalDate.now()) {
+    var reviewingNotice by remember { mutableStateOf(false) }
+    if (reviewingNotice) NotifyNowDialog(state, today, warnDays, includeExpiries, includeTasks, templates,
+        onConfirm = { reviewingNotice = false; onNotifyNow() }, onDismiss = { reviewingNotice = false })
     val all = remember(state) { state.dueItems() }
     var monthText by rememberSaveable { mutableStateOf(YearMonth.from(today).toString()) }
     val month = YearMonth.parse(monthText)
@@ -107,7 +111,7 @@ fun CalendarScreen(state: HomeWorkspaceState, warnDays: Int, onOpen: (CatalogSel
             DueRow(item, item.status(today, warnDays)) { item.target?.let(onOpen) }
         }
         item {
-            OutlinedButton(onClick = onNotifyNow, modifier = Modifier.fillMaxWidth()) { Text("🔔 Enviar ahora el aviso de vencimientos") }
+            OutlinedButton(onClick = { reviewingNotice = true }, modifier = Modifier.fillMaxWidth()) { Text("🔔 Revisar el aviso de vencimientos") }
         }
     }
 }
