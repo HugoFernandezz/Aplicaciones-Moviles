@@ -77,7 +77,9 @@ class AdvancedFeaturesTest {
         assertEquals(55.0, costs.materials, 0.001)
         assertEquals(50.0, costs.otherExpenses, 0.001)
         assertEquals(2000.0, costs.income, 0.001)
-        assertEquals(2000.0 - (160.0 + 55.0 + 50.0), costs.result, 0.001)
+        // Resultado real = ingresos − gastos registrados; las horas y materiales son una estimación aparte.
+        assertEquals(2000.0 - 50.0, costs.result, 0.001)
+        assertEquals(2000.0 - (160.0 + 55.0 + 50.0), costs.estimatedMargin, 0.001)
     }
 
     @Test fun groupsValuesByMonthAndWorkersByTrade() {
@@ -175,5 +177,28 @@ class NotifyNowTest {
         assertEquals("1 vencido · 1 próximo", content.title)
         assertEquals(listOf("2026-11-20 · Revisión anual (Juan Pérez)", "2026-11-25 · PRL 20h (Juan Pérez)"), content.lines)
         assertTrue(state.pendingWarnings(today, 15, includeExpiries = false, includeTasks = false).isEmpty())
+    }
+}
+
+class EconomyTest {
+    private val project = UnidadTrabajoEntity(id = 1, titulo = "Limpieza", tipo = "SERVICIO", clienteNombre = "", direccionUbicacion = "", fechaInicio = "2026-11-01")
+
+    @Test fun payrollAndMaterialExpensesAreNotCountedTwice() {
+        val state = HomeWorkspaceState(projects = listOf(project),
+            hours = listOf(RegistroHorasEntity(unidadTrabajoId = 1, empleadoId = 1, fecha = "2026-11-03", horasTrabajadas = 10.0, costeHoraAplicado = 15.0)),
+            materialUses = listOf(ConsumoMaterialEntity(unidadTrabajoId = 1, materialId = 1, cantidad = 2.0, precioUnitarioAplicado = 10.0, fecha = "2026-11-03")),
+            movements = listOf(
+                HomeMovement(projectId = 1, concept = "Cuota", amountCents = 100_000, income = true, date = "2026-11-15", category = "INGRESO"),
+                HomeMovement(projectId = 1, concept = "Nómina", amountCents = 15_000, income = false, date = "2026-11-30", category = "PERSONAL"),
+                HomeMovement(projectId = 1, concept = "Gasolina", amountCents = 3_000, income = false, date = "2026-11-10", category = "TRANSPORTE")))
+        val costs = state.projectCosts(1)
+        assertEquals(150.0, costs.personnel, 0.001)
+        assertEquals(30.0, costs.otherExpenses, 0.001) // la nómina no se suma otra vez
+        assertEquals(180.0, costs.registeredExpenses, 0.001)
+        assertEquals(820.0, costs.result, 0.001) // 1000 − 180: positivo
+        val month = state.monthlyValues(1, java.time.LocalDate.parse("2026-11-21")).single()
+        assertEquals(1000.0, month.income, 0.001)
+        assertEquals(180.0, month.expenses, 0.001)
+        assertEquals(820.0, month.result, 0.001)
     }
 }
