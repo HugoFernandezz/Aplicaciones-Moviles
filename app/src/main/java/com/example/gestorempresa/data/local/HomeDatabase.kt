@@ -127,6 +127,8 @@ interface HomeDao {
     @Query("SELECT * FROM home_attachments ORDER BY createdAt DESC, id DESC") fun attachments(): Flow<List<HomeAttachment>>
     @Insert suspend fun addAttachment(value: HomeAttachment): Long
     @Query("DELETE FROM home_attachments WHERE id = :id") suspend fun deleteAttachment(id: Long)
+    @Query("UPDATE home_attachments SET path = :path, mimeType = :mimeType WHERE id = :id")
+    suspend fun updateAttachmentFile(id: Long, path: String, mimeType: String)
     @Query("DELETE FROM home_attachments WHERE ownerKind = :kind AND ownerId = :id") suspend fun deleteAttachmentsOf(kind: String, id: Long)
     @Query("SELECT * FROM consumos_materiales ORDER BY fecha DESC, id DESC") fun materialUses(): Flow<List<ConsumoMaterialEntity>>
     @Insert suspend fun addMaterialUse(value: ConsumoMaterialEntity)
