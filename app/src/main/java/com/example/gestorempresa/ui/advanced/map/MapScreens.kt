@@ -22,7 +22,7 @@ fun UnidadTrabajoEntity.toPin(): MapPin? = if (latitud != null && longitud != nu
     MapPin(id, titulo, listOf(clienteNombre, direccionUbicacion, estado).filter { it.isNotBlank() }.joinToString(" · "), latitud, longitud) else null
 
 /**
- * Mapa con la ubicación de todas las obras, servicios y proyectos (y, por tanto, de sus clientes).
+ * Mapa con la ubicación de todos los servicios y proyectos (y, por tanto, de sus clientes). Válido para cualquier sector.
  * Se puede filtrar por estado; al tocar dos veces un punto se abre su ficha.
  */
 @Composable
@@ -33,7 +33,7 @@ fun ProjectsMapScreen(state: HomeWorkspaceState, onOpenProject: (Long) -> Unit, 
     val missing = visible.filter { it.latitud == null || it.longitud == null }
     Column(modifier.fillMaxSize().testTag("map-screen")) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("Mapa de obras y servicios", style = MaterialTheme.typography.headlineSmall)
+            Text("Mapa de servicios y proyectos", style = MaterialTheme.typography.headlineSmall)
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(listOf("TODOS" to "Todos", "ACTIVO" to "Activos", "PAUSADO" to "Pausados", "FINALIZADO" to "Finalizados")) { (code, label) ->
                     FilterChip(selected = status == code, onClick = { status = code }, label = { Text(label) })

@@ -82,7 +82,7 @@ fun AdvancedDetailFooter(selection: CatalogSelection, state: HomeWorkspaceState,
             state.projects.firstOrNull { it.id == selection.id }?.let { project ->
                 ProjectMapCard(project, onOpenMap) { onPickLocation(project.id) }
                 MaterialUsageCard(project.id, state, workspace)
-                PhotosCard(owner, project.id, state.attachments, storage, workspace, onOpenAttachment, "📷 Fotos de la obra y trabajos realizados")
+                PhotosCard(owner, project.id, state.attachments, storage, workspace, onOpenAttachment, "📷 Fotos del servicio y trabajos realizados")
             }
         }
         if (selection.kind == CatalogKind.EMPLOYEES || selection.kind == CatalogKind.SUBCONTRACTORS)
