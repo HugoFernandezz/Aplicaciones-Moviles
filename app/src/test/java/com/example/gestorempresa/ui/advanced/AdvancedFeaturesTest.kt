@@ -10,6 +10,7 @@ import com.example.gestorempresa.ui.advanced.communication.*
 import com.example.gestorempresa.ui.advanced.dates.DueKind
 import com.example.gestorempresa.ui.advanced.dates.DueStatus
 import com.example.gestorempresa.ui.advanced.dates.dueItems
+import com.example.gestorempresa.ui.advanced.dates.dueOverview
 import com.example.gestorempresa.ui.advanced.dates.pendingWarnings
 import com.example.gestorempresa.ui.advanced.stats.monthlyValues
 import com.example.gestorempresa.ui.advanced.stats.projectCosts
@@ -93,7 +94,7 @@ class AdvancedFeaturesTest {
         val items = state.dueItems()
         val contract = items.single { it.kind == DueKind.CONTRATO }
         assertEquals(CatalogSelection(CatalogKind.EMPLOYEES, 1), contract.target)
-        assertEquals(DueStatus.PROGRAMADO, contract.status(today, 7))
+        assertEquals(DueStatus.VIGENTE, contract.status(today, 7))
         assertEquals(DueStatus.PROXIMO, contract.status(today, 15))
         assertEquals(DueStatus.VENCIDO, items.single { it.title == "PRL 20h" }.status(today, 15))
         assertEquals(DueStatus.HECHO, items.single { it.kind == DueKind.INICIO }.status(today, 15))
@@ -119,5 +120,33 @@ class AdvancedFeaturesTest {
         val withPhoto = state.copy(employees = state.employees.map { if (it.id == 1L) it.copy(fotoUrl = "/foto.jpg") else it })
         assertEquals(listOf("/x.pdf", "/foto.jpg"), withPhoto.filesOwnedBy(CatalogSelection(CatalogKind.EMPLOYEES, 1)))
         assertTrue(withPhoto.filesOwnedBy(CatalogSelection(CatalogKind.EMPLOYEES, 2)).isEmpty())
+    }
+}
+
+class DueOverviewTest {
+    private val today = java.time.LocalDate.parse("2026-11-21")
+    private val state = HomeWorkspaceState(obligations = listOf(
+        HomeObligation(1, "MEDICO", "Vence hoy", "EMPLEADO", 1, "2026-11-21"),
+        HomeObligation(2, "CURSO", "Vencido ayer", "EMPLEADO", 1, "2026-11-20"),
+        HomeObligation(3, "CURSO", "Dentro de un año", "EMPLEADO", 1, "2027-11-21"),
+        HomeObligation(4, "DOCUMENTO", "Sin fecha", "EMPLEADO", 1),
+        HomeObligation(5, "MEDICO", "Atendido", "EMPLEADO", 1, "2026-11-01", resolved = true)),
+        tasks = listOf(HomeTask(1, "Tarea vencida", 1, "2026-11-01")))
+
+    @Test fun separatesValidUpcomingAndExpiredWithoutTasks() {
+        val overview = state.dueOverview(today, warnDays = 15)
+        assertEquals(listOf("Vencido ayer"), overview.expired.map { it.title })
+        assertEquals(listOf("Vence hoy"), overview.upcoming.map { it.title }) // hoy todavía es válido
+        assertEquals(listOf("Dentro de un año"), overview.valid.map { it.title })
+        assertEquals(1, overview.pendingWithoutDate)
+        assertEquals(3, overview.bellCount) // vencido + próximo + documentación sin fecha
+        assertTrue(overview.hasUrgent)
+    }
+
+    @Test fun scheduledDatesAreNotCalledValid() {
+        val task = state.dueItems().single { it.kind == DueKind.TAREA }
+        assertEquals(DueStatus.VENCIDO, task.status(today, 15))
+        val future = state.copy(tasks = listOf(HomeTask(2, "Futura", 1, "2027-01-01"))).dueItems().single { it.kind == DueKind.TAREA }
+        assertEquals(DueStatus.PROGRAMADO, future.status(today, 15))
     }
 }
