@@ -65,8 +65,9 @@ fun MessagingScreen(state: HomeWorkspaceState, templateStore: MessageTemplateSto
                     }
                     androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(enabled = whatsappNumber(person.phone) != null && person.email.isNotBlank() && personalizedMessage.isNotBlank(), onClick = {
-                            sendMessage(context, Channel.BOTH, person.phone, person.email, "Mensaje de empresa", personalizedMessage)
-                        }) { Text("WhatsApp + Email") }
+                            // Se abre el redactor, que envía por los dos canales paso a paso.
+                            composingFor = person
+                        }) { Text("WhatsApp + Email…") }
                         androidx.compose.material3.TextButton(onClick = { composingFor = person }) { Text("Personalizar") }
                     }
                 }

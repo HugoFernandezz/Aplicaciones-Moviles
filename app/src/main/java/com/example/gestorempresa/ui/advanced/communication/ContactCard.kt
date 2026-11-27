@@ -83,12 +83,24 @@ fun MessageComposerDialog(contact: ContactInfo, state: HomeWorkspaceState, templ
     val suggestions = remember(templateTitle, state) { suggestedValues(state, contact, template) }
     val values = remember(templateTitle) { mutableStateMapOf<String, String>().apply { putAll(suggestions) } }
     var subject by rememberSaveable { mutableStateOf("Mensaje de la empresa") }
+    var channel by rememberSaveable { mutableStateOf(if (whatsappNumber(contact.phone) != null) Channel.WHATSAPP else Channel.EMAIL) }
+    // EDITAR → ENVIAR. El plan guarda el estado de cada canal.
+    var sendPlan by remember { mutableStateOf<SendPlan?>(null) }
     val placeholders = placeholdersOf(text)
     val finalMessage = fillTemplate(text, values)
     val missing = placeholdersOf(finalMessage)
     val hasWhatsapp = whatsappNumber(contact.phone) != null
     val hasEmail = contact.email.isNotBlank()
 
+    val plan = sendPlan
+    if (plan != null) {
+        AlertDialog(onDismissRequest = {}, title = { Text("Mensaje para ${contact.name}") },
+            text = { Column(Modifier.verticalScroll(rememberScrollState())) {
+                SendProgress(plan, { sendPlan = it }, contact.phone, contact.email, subject, finalMessage, onFinish = onDismiss)
+            } },
+            confirmButton = {}, dismissButton = { if (!plan.finished) TextButton(onClick = onDismiss) { Text("Cerrar") } })
+        return
+    }
     AlertDialog(onDismissRequest = onDismiss, title = { Text("Mensaje para ${contact.name}") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -119,16 +131,18 @@ fun MessageComposerDialog(contact: ContactInfo, state: HomeWorkspaceState, templ
                 if (!hasEmail) Text("Email no disponible: no hay correo.", style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 val ready = finalMessage.isNotBlank() && missing.isEmpty()
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Button(enabled = ready && hasWhatsapp, onClick = {
-                        if (sendMessage(context, Channel.WHATSAPP, contact.phone, contact.email, subject, finalMessage)) onDismiss()
-                    }, modifier = Modifier.fillMaxWidth()) { Text("📱 WhatsApp") }
-                    Button(enabled = ready && hasEmail, onClick = {
-                        if (sendMessage(context, Channel.EMAIL, contact.phone, contact.email, subject, finalMessage)) onDismiss()
-                    }, modifier = Modifier.fillMaxWidth()) { Text("✉️ Email") }
-                    OutlinedButton(enabled = ready && hasWhatsapp && hasEmail, onClick = {
-                        if (sendMessage(context, Channel.BOTH, contact.phone, contact.email, subject, finalMessage)) onDismiss()
-                    }, modifier = Modifier.fillMaxWidth()) { Text("📱 + ✉️ WhatsApp + Email") }
+                Text("Canal", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Channel.entries.forEach { option ->
+                    val possible = when (option) { Channel.WHATSAPP -> hasWhatsapp; Channel.EMAIL -> hasEmail; Channel.BOTH -> hasWhatsapp && hasEmail }
+                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        RadioButton(selected = channel == option, enabled = possible, onClick = { channel = option })
+                        Text(option.label + if (!possible) " (no disponible)" else "", color = if (possible) MaterialTheme.colorScheme.onSurface
+                            else MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                val channelPossible = when (channel) { Channel.WHATSAPP -> hasWhatsapp; Channel.EMAIL -> hasEmail; Channel.BOTH -> hasWhatsapp && hasEmail }
+                Button(enabled = ready && channelPossible, onClick = { sendPlan = planFor(channel) }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Abrir para enviar")
                 }
             }
         },
