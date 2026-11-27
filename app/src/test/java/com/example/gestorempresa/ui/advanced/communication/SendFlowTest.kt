@@ -29,3 +29,19 @@ class SendFlowTest {
         assertTrue(SendStatus.OPENED.label.contains("no verificado"))
     }
 }
+
+class MessageFieldsTest {
+    @Test fun validatesTimesDatesAndScheduleCoherence() {
+        val keys = listOf("FECHA", "HORA_INICIO", "HORA_FIN")
+        assertTrue(messageFieldErrors(mapOf("FECHA" to "2026-12-01", "HORA_INICIO" to "08:00", "HORA_FIN" to "16:30"), keys).isEmpty())
+        assertEquals(setOf("HORA_FIN"), messageFieldErrors(mapOf("FECHA" to "2026-12-01", "HORA_INICIO" to "16:00", "HORA_FIN" to "08:00"), keys).keys)
+        assertEquals(setOf("FECHA", "HORA_INICIO"), messageFieldErrors(mapOf("FECHA" to "2026-02-30", "HORA_INICIO" to "25:00", "HORA_FIN" to "08:00"), keys).keys)
+        assertTrue(messageFieldErrors(mapOf("HORA" to "8:30"), listOf("HORA")).containsKey("HORA"))
+    }
+
+    @Test fun scheduleTemplateUsesStartAndEndTimes() {
+        val template = messageTemplates.first { it.title == "Cambio de horario" }
+        assertEquals(listOf("NOMBRE", "FECHA", "HORA_INICIO", "HORA_FIN"), placeholdersOf(template.text))
+        assertEquals("Hora de inicio", placeholderLabel("HORA_INICIO"))
+    }
+}

@@ -41,10 +41,12 @@ fun suggestedValues(state: HomeWorkspaceState, contact: ContactInfo, template: M
         "LUGAR" to (project?.direccionUbicacion ?: ""),
         "FECHA" to date,
         "DÍA" to "lunes",
-        "HORA" to "8:00",
+        "HORA" to "08:00",
+        "HORA_INICIO" to "08:00",
+        "HORA_FIN" to "16:00",
         "CURSO" to (course?.title ?: ""),
         "DOCUMENTO" to (document?.title ?: ""),
-        "HORARIO" to "de 8:00 a 16:00"
+        "HORARIO" to "de 08:00 a 16:00"
     )
 }
 
@@ -89,6 +91,9 @@ fun MessageComposerDialog(contact: ContactInfo, state: HomeWorkspaceState, templ
     val placeholders = placeholdersOf(text)
     val finalMessage = fillTemplate(text, values)
     val missing = placeholdersOf(finalMessage)
+    // Horas (HH:mm, inicio antes que fin) y fechas válidas antes de poder enviar.
+    val fieldErrors = messageFieldErrors(values, placeholders)
+    var triedToSend by remember { mutableStateOf(false) }
     val hasWhatsapp = whatsappNumber(contact.phone) != null
     val hasEmail = contact.email.isNotBlank()
 
@@ -116,9 +121,9 @@ fun MessageComposerDialog(contact: ContactInfo, state: HomeWorkspaceState, templ
                 if (template.title == CUSTOM_TEMPLATE) Text("Puedes usar huecos como [NOMBRE] o [FECHA] y se rellenarán abajo.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 placeholders.forEach { key ->
-                    OutlinedTextField(values[key].orEmpty(), { values[key] = it }, label = { Text(key.lowercase().replaceFirstChar(Char::uppercase)) },
-                        singleLine = true, modifier = Modifier.fillMaxWidth())
+                    MessageFieldEditor(key, values[key].orEmpty(), { values[key] = it }, contact, state, fieldErrors[key], showErrors = triedToSend)
                 }
+                fieldErrors.values.firstOrNull()?.takeIf { triedToSend }?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                 if (hasEmail) OutlinedTextField(subject, { subject = it }, label = { Text("Asunto del email") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 Text("Vista previa", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.secondaryContainer) {
@@ -130,7 +135,7 @@ fun MessageComposerDialog(contact: ContactInfo, state: HomeWorkspaceState, templ
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (!hasEmail) Text("Email no disponible: no hay correo.", style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
-                val ready = finalMessage.isNotBlank() && missing.isEmpty()
+                val ready = finalMessage.isNotBlank() && missing.isEmpty() && fieldErrors.isEmpty()
                 Text("Canal", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Channel.entries.forEach { option ->
                     val possible = when (option) { Channel.WHATSAPP -> hasWhatsapp; Channel.EMAIL -> hasEmail; Channel.BOTH -> hasWhatsapp && hasEmail }
@@ -141,7 +146,11 @@ fun MessageComposerDialog(contact: ContactInfo, state: HomeWorkspaceState, templ
                     }
                 }
                 val channelPossible = when (channel) { Channel.WHATSAPP -> hasWhatsapp; Channel.EMAIL -> hasEmail; Channel.BOTH -> hasWhatsapp && hasEmail }
-                Button(enabled = ready && channelPossible, onClick = { sendPlan = planFor(channel) }, modifier = Modifier.fillMaxWidth()) {
+                // Si falta algo se marca en rojo al intentarlo, en lugar de dejar el botón apagado sin explicación.
+                Button(enabled = finalMessage.isNotBlank() && channelPossible, onClick = {
+                    triedToSend = true
+                    if (ready) sendPlan = planFor(channel)
+                }, modifier = Modifier.fillMaxWidth()) {
                     Text("Abrir para enviar")
                 }
             }

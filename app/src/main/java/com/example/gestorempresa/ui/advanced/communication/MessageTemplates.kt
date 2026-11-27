@@ -18,8 +18,8 @@ val messageTemplates = listOf(
     MessageTemplate("Asignación a un servicio", "Hola [NOMBRE], has sido asignado al servicio [SERVICIO] el día [FECHA]."),
     MessageTemplate("Reconocimiento médico", "Hola [NOMBRE], tu reconocimiento médico está próximo a caducar ([FECHA]). Por favor, pide cita lo antes posible."),
     MessageTemplate("Curso próximo a caducar", "Hola [NOMBRE], tu curso [CURSO] caduca el [FECHA]. Avísanos para organizar la renovación."),
-    MessageTemplate("Documentación pendiente", "Hola [NOMBRE], necesitamos que nos entregues la siguiente documentación: [DOCUMENTO]."),
-    MessageTemplate("Cambio de horario", "Hola [NOMBRE], a partir del [FECHA] tu horario será [HORARIO]. ¿Puedes confirmarlo?"),
+    MessageTemplate("Documentación pendiente", "Hola [NOMBRE], necesitamos que nos entregues este documento: [DOCUMENTO]."),
+    MessageTemplate("Cambio de horario", "Hola [NOMBRE], a partir del [FECHA] tu horario será de [HORA_INICIO] a [HORA_FIN]. ¿Puedes confirmarlo?"),
     MessageTemplate(CUSTOM_TEMPLATE, "")
 )
 
