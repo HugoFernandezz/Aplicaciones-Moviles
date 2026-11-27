@@ -38,7 +38,7 @@ Por petición de la usuaria, los archivos nuevos y las modificaciones de pruebas
 - Pruebas Android de formularios: **9/9** en el emulador API 36 (`EmployeePhoneUiTest`: 4; `CatalogPhoneUiTest`: 5). El runner termina con `OK (9 tests)` en 129,038 segundos. Se comprueban el guardado real en Room, el foco y el error del campo, los borradores y la edición sin mezclar tablas.
 - `git diff --check`: superado.
 
-APK normal conservado antes de compilar la variante aislada de pruebas: `build/entrega/gestor-empresa-debug.apk`. SHA-256: `F62D3D5D4064A4924D99FEF22B8F12B4EBA2776DCA2FC1207F61D1261C6E93A6`.
+APK de esta revisión, anterior a la reparación posterior de acceso: SHA-256 `F62D3D5D4064A4924D99FEF22B8F12B4EBA2776DCA2FC1207F61D1261C6E93A6`, conservado como `build/entrega/gestor-empresa-1.0-debug.apk`. La copia `gestor-empresa-debug.apk` se actualiza con las entregas posteriores; la versión 1.1 y su verificación se describen en [REVISION_AUTENTICACION.md](REVISION_AUTENTICACION.md).
 
 Informe unitario: `build/entrega/dni-contactos-unit-tests/index.html`.
 

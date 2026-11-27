@@ -1,5 +1,30 @@
 # Revisión de autenticación — 26/11/2026
 
+## Corrección del acceso con perfil compartido ausente — 27/11/2026
+
+Se observó una cuenta existente en Authentication sin su documento en `authProfiles`. El APK instalado en este emulador coincide con la huella de la entrega anterior (`F62D3D5D4064A4924D99FEF22B8F12B4EBA2776DCA2FC1207F61D1261C6E93A6`). Esto confirma la diferencia entre identidad y perfil, pero no permite determinar por sí solo en qué ejecución anterior quedó incompleta la publicación del registro. La versión anterior rechazaba el acceso en una instalación sin copia local y exigía publicar desde el primer dispositivo. Tampoco intentaba publicar desde una sesión que ya estuviera abierta.
+
+Correcciones:
+
+- Una sesión de Firebase ya abierta intenta publicar su perfil local si falta en el servidor, sin volver a pedir la contraseña ni cambiar los identificadores locales. Los errores temporales conservan la sesión y se reintentan.
+- Si las credenciales son válidas y no existe perfil ni copia local, se ofrece completar nombre, apellidos, empresa y sector desde ese dispositivo. No se crea otra cuenta de Authentication, no se inventan datos de empresa y no se abre contenido privado antes de guardar.
+- El guardado usa la transacción existente y el mismo UID. Si el primer dispositivo publicó el perfil mientras se completaba el formulario, se recupera ese documento sin sobrescribirlo. También se comprueba la publicación pendiente durante la comprobación periódica de sesión.
+- Cancelar descarta la autenticación pendiente. Se comprueba que la identidad autenticada siga siendo la misma antes de completar datos.
+- Teléfono, DNI y cargo vacíos o ausentes en documentos antiguos se consideran opcionales al leerlos. La asociación de empresa con UID sigue siendo obligatoria.
+- APK identificado como versión **1.1**, código **2**, para distinguirlo de las instalaciones anteriores.
+
+Verificación de esta corrección:
+
+- Compilación normal `assembleDebug`: `BUILD SUCCESSFUL`.
+- Suite local aislada de la reparación: **10/10**, sin fallos, errores ni omitidas. Ejecuta el repositorio real con Room en memoria y dos clientes de autenticación simulados independientes que comparten el servidor simulado. Incluye registro en una base y acceso en otra, reparación del perfil ausente, migración de sesión abierta, cancelación, contraseña incorrecta, desconexión, cambio de identidad y publicación concurrente. No equivale a una prueba con dos teléfonos físicos ni contra dos SDK reales de Firebase.
+- Pruebas de interfaz Android de la reparación: **2/2**, `OK (2 tests)`, 34,829 s, en la aplicación aislada `.uitests`. Comprueban validación, foco y error del campo, guardado de los datos con la misma identidad, entrada en contenido privado y cancelación sin acceso privado. El repositorio de esta prueba de interfaz es simulado; no crea cuentas técnicas en el proyecto real. Registro: `build/entrega/multidispositivo-1.1-android-results.log`.
+- APK normal: `build/entrega/gestor-empresa-1.1-debug.apk` (también actualizado como `gestor-empresa-debug.apk`), SHA-256 `0E9CCE8A9C4AEF55F273A452434EF02D6E549846FB376726AB8C8BDC5BCC6946`. `aapt` confirma el identificador `com.example.gestorempresa`, versión 1.1, código 2.
+- Informe local: `build/entrega/multidispositivo-1.1-unit-tests/index.html`.
+
+Las nuevas pruebas y sus herramientas se mantienen en `.local/excluded-tests/current-multidevice/`, ignoradas por Git, conforme a la petición de no incluirlas en los commits. No se ha repetido la suite completa ni lint. No se ha confirmado todavía el resultado en el teléfono físico de la captura: la usuaria indica que debe comprobarlo su amiga después de subir el código a GitHub. La corrección requiere compilar e instalar la versión 1.1 también en ese teléfono. No se debe crear otra cuenta para reparar el perfil ausente.
+
+Archivos funcionales: `FirebaseAuthRepository.kt`, `FirestorePerfilCuentaService.kt`, `AuthModels.kt`, `AuthValidator.kt`, `AuthViewModel.kt`, `AuthRoot.kt`, el nuevo `CompleteAccountScreen.kt` y `app/build.gradle.kts`. No se cambian las reglas de seguridad publicadas ni el proveedor de autenticación.
+
 Base: `origin/main`, commit `93ea889`. Rama: `codex/auth-multidispositivo`.
 El trabajo está en la carpeta `auth-multidispositivo`, un worktree independiente. No se han sustituido las dos copias locales anteriores ni sus cambios de Android Studio.
 
