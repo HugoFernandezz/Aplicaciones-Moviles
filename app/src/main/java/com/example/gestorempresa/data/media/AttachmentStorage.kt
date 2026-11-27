@@ -51,8 +51,11 @@ class AttachmentStorage(context: Context, companyId: Long) {
         val extension = MimeTypeMap.getSingleton().getExtensionFromMimeType(mime)
             ?: name.substringAfterLast('.', "").ifBlank { "bin" }
         val target = newFile(prefix, extension)
-        val input = resolver.openInputStream(uri) ?: error("No se ha podido abrir el archivo seleccionado")
-        input.use { source -> target.outputStream().use { source.copyTo(it) } }
+        // Si la copia falla a medias se borra el archivo parcial para no dejar restos.
+        try {
+            val input = resolver.openInputStream(uri) ?: error("No se ha podido abrir el archivo seleccionado")
+            input.use { source -> target.outputStream().use { source.copyTo(it) } }
+        } catch (e: Exception) { target.delete(); throw e }
         StoredFile(target.absolutePath, name.substringBeforeLast('.').ifBlank { name }, mime)
     }
 
