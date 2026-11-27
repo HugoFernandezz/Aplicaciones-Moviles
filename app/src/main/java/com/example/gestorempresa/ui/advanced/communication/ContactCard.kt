@@ -88,6 +88,8 @@ fun MessageComposerDialog(contact: ContactInfo, state: HomeWorkspaceState, templ
     var channel by rememberSaveable { mutableStateOf(if (whatsappNumber(contact.phone) != null) Channel.WHATSAPP else Channel.EMAIL) }
     // EDITAR → ENVIAR. El plan guarda el estado de cada canal.
     var sendPlan by remember { mutableStateOf<SendPlan?>(null) }
+    // Vista previa antes de abrir nada. Al volver a editar se conserva todo lo escrito.
+    var previewing by rememberSaveable { mutableStateOf(false) }
     val placeholders = placeholdersOf(text)
     val finalMessage = fillTemplate(text, values)
     val missing = placeholdersOf(finalMessage)
@@ -104,6 +106,16 @@ fun MessageComposerDialog(contact: ContactInfo, state: HomeWorkspaceState, templ
                 SendProgress(plan, { sendPlan = it }, contact.phone, contact.email, subject, finalMessage, onFinish = onDismiss)
             } },
             confirmButton = {}, dismissButton = { if (!plan.finished) TextButton(onClick = onDismiss) { Text("Cerrar") } })
+        return
+    }
+    if (previewing) {
+        AlertDialog(onDismissRequest = { previewing = false }, title = { Text("Revisa antes de enviar") },
+            text = { Column(Modifier.verticalScroll(rememberScrollState())) {
+                MessagePreview(contact, channel, subject, finalMessage, values.filterKeys { it in placeholders })
+            } },
+            confirmButton = { Button(onClick = { previewing = false; sendPlan = planFor(channel) }) {
+                Text(if (channel == Channel.BOTH) "Empezar envío" else "Abrir ${channel.label}") } },
+            dismissButton = { TextButton(onClick = { previewing = false }) { Text("Editar") } })
         return
     }
     AlertDialog(onDismissRequest = onDismiss, title = { Text("Mensaje para ${contact.name}") },
@@ -149,9 +161,9 @@ fun MessageComposerDialog(contact: ContactInfo, state: HomeWorkspaceState, templ
                 // Si falta algo se marca en rojo al intentarlo, en lugar de dejar el botón apagado sin explicación.
                 Button(enabled = finalMessage.isNotBlank() && channelPossible, onClick = {
                     triedToSend = true
-                    if (ready) sendPlan = planFor(channel)
+                    if (ready) previewing = true
                 }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Abrir para enviar")
+                    Text("Vista previa")
                 }
             }
         },
@@ -177,5 +189,37 @@ private fun TemplateEditActions(edited: Boolean, customized: Boolean, onSaveTemp
             Text("Plantilla modificada por ti.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             TextButton(onClick = onRestore) { Text("Restaurar original") }
         }
+    }
+}
+
+/**
+ * Resumen de la comunicación antes de abrir WhatsApp o el correo: destinatario, contacto, canal,
+ * mensaje completo y los datos clave (lugar, fecha, horas y documento cuando corresponden).
+ */
+@Composable
+fun MessagePreview(contact: ContactInfo, channel: Channel, subject: String, message: String, values: Map<String, String>) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        PreviewRow("Destinatario", contact.name)
+        if (channel != Channel.EMAIL) PreviewRow("Teléfono (WhatsApp)", contact.phone)
+        if (channel != Channel.WHATSAPP) PreviewRow("Correo", contact.email)
+        PreviewRow("Canal", if (channel == Channel.BOTH) "WhatsApp y después Email" else channel.label)
+        if (channel != Channel.WHATSAPP) PreviewRow("Asunto", subject)
+        listOf("LUGAR", "FECHA", "DÍA", "HORA", "HORA_INICIO", "HORA_FIN", "DOCUMENTO", "SERVICIO", "CURSO").forEach { key ->
+            values[key]?.takeIf { it.isNotBlank() }?.let { PreviewRow(placeholderLabel(key), it) }
+        }
+        Text("Mensaje", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.secondaryContainer) {
+            Text(message, Modifier.padding(12.dp), color = MaterialTheme.colorScheme.onSecondaryContainer)
+        }
+        Text("Se abrirá la app con el mensaje preparado; el envío lo haces tú desde ella.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun PreviewRow(label: String, value: String) {
+    Column {
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value.ifBlank { "—" }, style = MaterialTheme.typography.bodyLarge)
     }
 }
