@@ -137,6 +137,8 @@ interface HomeDao {
     @Query("UPDATE subcontratados SET fotoUrl = :path WHERE id = :id") suspend fun setSubcontractorPhoto(id: Long, path: String?)
     @Query("UPDATE unidades_trabajo SET latitud = :latitude, longitud = :longitude WHERE id = :id")
     suspend fun setProjectLocation(id: Long, latitude: Double?, longitude: Double?)
+    @Query("UPDATE unidades_trabajo SET direccionUbicacion = :address, latitud = :latitude, longitud = :longitude WHERE id = :id")
+    suspend fun setProjectAddressAndLocation(id: Long, address: String, latitude: Double, longitude: Double)
 }
 
 /** Almacén del módulo 2 por empresa; no modifica las tablas de autenticación.
