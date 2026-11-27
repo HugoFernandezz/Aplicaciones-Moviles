@@ -18,6 +18,7 @@ import com.example.gestorempresa.ui.advanced.forms.DateField
 import com.example.gestorempresa.ui.advanced.forms.dateError
 import com.example.gestorempresa.ui.advanced.documents.writeProjectReport
 import com.example.gestorempresa.ui.advanced.map.ProjectMapCard
+import com.example.gestorempresa.ui.advanced.map.WorkZonesCard
 import com.example.gestorempresa.ui.advanced.media.PhotosCard
 import com.example.gestorempresa.ui.advanced.media.WorkerPhotoHeader
 import com.example.gestorempresa.ui.home.*
@@ -84,6 +85,8 @@ fun AdvancedDetailFooter(selection: CatalogSelection, state: HomeWorkspaceState,
                 PhotosCard(owner, project.id, state.attachments, storage, workspace, onOpenAttachment, "📷 Fotos de la obra y trabajos realizados")
             }
         }
+        if (selection.kind == CatalogKind.EMPLOYEES || selection.kind == CatalogKind.SUBCONTRACTORS)
+            WorkZonesCard(owner, selection.id, state, workspace)
         if (selection.kind == CatalogKind.MATERIALS) PhotosCard(owner, selection.id, state.attachments, storage, workspace, onOpenAttachment)
         DocumentsCard(owner, selection.id, state, storage, workspace, onOpenAttachment, extraActions = {
             if (selection.kind == CatalogKind.PROJECTS) {
