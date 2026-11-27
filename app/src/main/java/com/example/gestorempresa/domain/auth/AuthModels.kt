@@ -27,11 +27,14 @@ data class RegistroUsuario(
     val sector: String
 )
 
+/** Datos de una identidad ya autenticada cuyo perfil empresarial aún no existe. */
+data class DatosCuenta(val nombre: String = "", val apellidos: String = "", val empresa: String = "", val sector: String = "")
+
 enum class CampoAuth { NOMBRE, APELLIDOS, EMAIL, PASSWORD, CONFIRMACION, EMPRESA, SECTOR }
 enum class ErrorAuth {
     EMAIL_EN_USO, CREDENCIALES_INVALIDAS, BLOQUEO_TEMPORAL, DATOS_INVALIDOS, ALMACENAMIENTO,
     SERVICIO_NO_CONFIGURADO, SIN_CONEXION, SERVICIO_NO_DISPONIBLE, PERFIL_NO_DISPONIBLE,
-    VINCULACION_NECESARIA, DEMASIADAS_SOLICITUDES, PERFIL_SINCRONIZACION_PENDIENTE
+    VINCULACION_NECESARIA, DEMASIADAS_SOLICITUDES, PERFIL_SINCRONIZACION_PENDIENTE, COMPLETAR_PERFIL
 }
 
 sealed interface ResultadoAuth {
@@ -50,6 +53,7 @@ interface AuthRepository {
     val sesion: Flow<SesionUsuario?>
     suspend fun registrar(datos: RegistroUsuario): ResultadoAuth
     suspend fun iniciarSesion(email: String, password: String): ResultadoAuth
+    suspend fun completarPerfil(datos: DatosCuenta): ResultadoAuth = ResultadoAuth.Error(ErrorAuth.CREDENCIALES_INVALIDAS)
     suspend fun cerrarSesion(): ResultadoAuth
     suspend fun recuperarPassword(email: String): ResultadoAuth
 }

@@ -25,14 +25,22 @@ class FirebaseAuthRepository @Inject constructor(
     private val dao = db.authDao()
     private val mutex = Mutex()
     private val autenticando = MutableStateFlow(false)
+    private var identidadPendiente: IdentidadRemota? = null
     // Firebase renueva sus tokens; siete días solo limita las cuentas locales antiguas.
     override val sesion = combine(local.sesion, remote.identidad, autenticando, flow {
-        while (true) { remote.actualizarSesion(); emit(Unit); delay(60_000) }
+        emit(Unit) // La red no bloquea la presentación de una sesión local válida.
+        while (true) {
+            remote.actualizarSesion()
+            publicarPerfilDeSesionAbierta()
+            emit(Unit)
+            delay(60_000)
+        }
     }) { session, identity, busy, _ ->
         session?.takeIf { !busy && (it.usuario.firebaseUid == null || it.usuario.firebaseUid == identity?.uid) }
     }.distinctUntilChanged()
 
     override suspend fun registrar(datos: RegistroUsuario): ResultadoAuth = ejecutar {
+        identidadPendiente = null
         if (AuthValidator.validarRegistro(datos).isNotEmpty()) return@ejecutar ResultadoAuth.Error(ErrorAuth.DATOS_INVALIDOS)
         if (!remote.configurado) return@ejecutar ResultadoAuth.Error(ErrorAuth.SERVICIO_NO_CONFIGURADO)
         val email = AuthValidator.normalizarEmail(datos.email)
@@ -57,6 +65,7 @@ class FirebaseAuthRepository @Inject constructor(
     }
 
     override suspend fun iniciarSesion(email: String, password: String): ResultadoAuth = ejecutar {
+        identidadPendiente = null
         if (AuthValidator.validarLogin(email, password, maxLength = 4096).isNotEmpty()) return@ejecutar ResultadoAuth.Error(ErrorAuth.DATOS_INVALIDOS)
         val normalized = AuthValidator.normalizarEmail(email)
         val localProfile = dao.buscarPorEmail(normalized)
@@ -95,19 +104,72 @@ class FirebaseAuthRepository @Inject constructor(
             val profile = perfiles.obtener(identity.uid) ?: run {
                 // Se publica una vez desde el teléfono que conserva los datos y solo
                 // después de verificar la identidad y, si procede, la clave antigua.
-                val previous = localProfile ?: return@ejecutar ResultadoAuth.Error(ErrorAuth.PERFIL_NO_DISPONIBLE)
-                val company = requireNotNull(dao.buscarEmpresa(previous.empresaId))
-                val extras = db.perfilDao().buscarPerfil(previous.id)
-                perfiles.crearSiFalta(PerfilCuentaRemoto(identity.uid, previous.nombre, previous.apellidos,
-                    company.remoteId ?: identity.uid, company.nombre, company.sector, company.creadaEn,
-                    extras?.telefono.orEmpty(), extras?.dni.orEmpty(), extras?.cargo.orEmpty(), extras?.direccion.orEmpty(), extras?.telefonoRegion))
+                val previous = localProfile ?: dao.buscarPorUid(identity.uid)
+                if (previous == null) {
+                    identidadPendiente = identity
+                    return@ejecutar ResultadoAuth.Error(ErrorAuth.COMPLETAR_PERFIL)
+                }
+                perfiles.crearSiFalta(perfilLocal(identity, previous))
             }
             guardarCopia(identity, profile, abrirSesion = true)
             success = true
             ResultadoAuth.Correcto
         } finally {
-            if (!success) remote.salir()
+            if (!success && identidadPendiente == null) remote.salir()
             autenticando.value = false
+        }
+    }
+
+    override suspend fun completarPerfil(datos: DatosCuenta): ResultadoAuth = ejecutar {
+        if (AuthValidator.validarDatosCuenta(datos).isNotEmpty()) return@ejecutar ResultadoAuth.Error(ErrorAuth.DATOS_INVALIDOS)
+        val pending = identidadPendiente ?: return@ejecutar ResultadoAuth.Error(ErrorAuth.CREDENCIALES_INVALIDAS)
+        autenticando.value = true
+        try {
+            remote.actualizarSesion()
+            val identity = remote.identidad.first()
+            if (identity != pending) {
+                identidadPendiente = null
+                return@ejecutar ResultadoAuth.Error(ErrorAuth.CREDENCIALES_INVALIDAS)
+            }
+            // La transacción conserva los datos si el primer teléfono los publicó entretanto.
+            // No se crea otra cuenta de Authentication ni se elige una empresa ajena.
+            val profile = perfiles.crearSiFalta(PerfilCuentaRemoto(pending.uid, datos.nombre.trim(), datos.apellidos.trim(),
+                pending.uid, datos.empresa.trim(), datos.sector, clock.millis()))
+            guardarCopia(pending, profile, abrirSesion = true)
+            identidadPendiente = null
+            ResultadoAuth.Correcto
+        } finally { autenticando.value = false }
+    }
+
+    private suspend fun perfilLocal(identity: IdentidadRemota, usuario: UsuarioEntity): PerfilCuentaRemoto {
+        if (usuario.firebaseUid != null && usuario.firebaseUid != identity.uid) throw ErrorServicioAuth(ErrorAuth.VINCULACION_NECESARIA)
+        val company = requireNotNull(dao.buscarEmpresa(usuario.empresaId))
+        val extras = db.perfilDao().buscarPerfil(usuario.id)
+        return PerfilCuentaRemoto(identity.uid, usuario.nombre, usuario.apellidos,
+            company.remoteId ?: identity.uid, company.nombre, company.sector, company.creadaEn,
+            extras?.telefono.orEmpty(), extras?.dni.orEmpty(), extras?.cargo.orEmpty(), extras?.direccion.orEmpty(), extras?.telefonoRegion)
+    }
+
+    /** También migra perfiles cuando la actualización conserva una sesión ya abierta. */
+    private suspend fun publicarPerfilDeSesionAbierta() = withContext(Dispatchers.IO) {
+        mutex.withLock {
+            try {
+                val identity = remote.identidad.first() ?: return@withLock
+                if (identidadPendiente == identity) {
+                    perfiles.obtener(identity.uid)?.let {
+                        guardarCopia(identity, it, abrirSesion = true)
+                        identidadPendiente = null
+                    }
+                    return@withLock
+                }
+                val session = dao.observarSesion().first() ?: return@withLock
+                if (session.firebaseUid != identity.uid) return@withLock
+                if (perfiles.obtener(identity.uid) == null) {
+                    val usuario = dao.buscarUsuario(session.usuarioId) ?: return@withLock
+                    perfiles.crearSiFalta(perfilLocal(identity, usuario))
+                }
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) { /* Conserva la sesión válida y reintenta al recuperar la conexión. */ }
         }
     }
 
@@ -131,6 +193,7 @@ class FirebaseAuthRepository @Inject constructor(
     }
 
     override suspend fun cerrarSesion(): ResultadoAuth = ejecutar {
+        identidadPendiente = null
         remote.salir() // Solo elimina las credenciales del SDK en este dispositivo.
         dao.borrarSesion()
         ResultadoAuth.Correcto

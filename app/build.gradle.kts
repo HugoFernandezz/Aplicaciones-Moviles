@@ -28,8 +28,8 @@ android {
         applicationId = if (homeUiTests) "com.example.gestorempresa.uitests" else "com.example.gestorempresa"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
         buildConfigField("String", "AUTH_EMULATOR_HOST", "\"\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

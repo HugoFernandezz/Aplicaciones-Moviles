@@ -18,7 +18,8 @@ data class AuthUiState(
     val errores: Map<CampoAuth, String> = emptyMap(),
     val intentoValidacion: Int = 0,
     val mensaje: String? = null, val ocupado: Boolean = false,
-    val emailRecuperacion: String = "", val recuperacionSolicitada: Boolean = false
+    val emailRecuperacion: String = "", val recuperacionSolicitada: Boolean = false,
+    val completandoPerfil: Boolean = false, val datosCuenta: DatosCuenta = DatosCuenta()
 )
 
 sealed interface AuthEvent { data class CuentaCreada(val email: String) : AuthEvent }
@@ -78,6 +79,34 @@ class AuthViewModel @Inject constructor(
             mostrarResultado(result)
         }
     }
+
+    fun editarDatosCuenta(datos: DatosCuenta) {
+        if (_ui.value.ocupado) return
+        _ui.update { it.copy(datosCuenta = datos, mensaje = null,
+            errores = if (it.errores.isEmpty()) emptyMap() else AuthValidator.validarDatosCuenta(datos)) }
+    }
+
+    fun completarPerfil() {
+        val datos = _ui.value.datosCuenta
+        val errors = AuthValidator.validarDatosCuenta(datos)
+        if (errors.isNotEmpty()) {
+            _ui.update { it.copy(errores = errors, intentoValidacion = it.intentoValidacion + 1) }
+            return
+        }
+        lanzar {
+            when (val result = repository.completarPerfil(datos)) {
+                ResultadoAuth.Correcto -> limpiarSecretos()
+                is ResultadoAuth.Error -> {
+                    if (result.tipo == ErrorAuth.CREDENCIALES_INVALIDAS) {
+                        limpiarSecretos()
+                        _ui.update { it.copy(mensaje = "Vuelve a iniciar sesión para completar tus datos.") }
+                    } else mostrarResultado(result)
+                }
+            }
+        }
+    }
+
+    fun cancelarCompletarPerfil() = cerrarSesion()
 
     fun registrar() {
         if (_ui.value.ocupado) return
@@ -142,7 +171,8 @@ class AuthViewModel @Inject constructor(
     }
 
     fun limpiarSecretos() {
-        _ui.update { it.copy(password = "", registro = it.registro.copy(password = "", confirmarPassword = ""), errores = emptyMap(), mensaje = null, recuperacionSolicitada = false) }
+        _ui.update { it.copy(password = "", registro = it.registro.copy(password = "", confirmarPassword = ""), errores = emptyMap(), mensaje = null, recuperacionSolicitada = false,
+            completandoPerfil = false, datosCuenta = DatosCuenta()) }
     }
     fun reintentarSesion() { reintentos.update { it + 1 } }
 
@@ -158,6 +188,10 @@ class AuthViewModel @Inject constructor(
     }
 
     private fun mostrarResultado(result: ResultadoAuth) {
+        if (result == ResultadoAuth.Error(ErrorAuth.COMPLETAR_PERFIL)) {
+            _ui.update { it.copy(completandoPerfil = true, datosCuenta = DatosCuenta(), errores = emptyMap(), mensaje = null) }
+            return
+        }
         if (result is ResultadoAuth.Error) _ui.update { state -> state.copy(mensaje = when (result.tipo) {
             ErrorAuth.EMAIL_EN_USO -> "Ya existe una cuenta con ese correo. Inicia sesión."
             ErrorAuth.CREDENCIALES_INVALIDAS -> "El correo o la contraseña no son correctos."
@@ -167,7 +201,8 @@ class AuthViewModel @Inject constructor(
             ErrorAuth.SERVICIO_NO_CONFIGURADO -> "El servicio de acceso por correo aún no está disponible. Contacta con el responsable de la aplicación."
             ErrorAuth.SIN_CONEXION -> "No se ha podido conectar. Comprueba tu conexión a Internet y vuelve a intentarlo."
             ErrorAuth.SERVICIO_NO_DISPONIBLE -> "El servicio de acceso no está disponible en este momento. Inténtalo más tarde."
-            ErrorAuth.PERFIL_NO_DISPONIBLE -> "La cuenta está autenticada, pero falta publicar su perfil. Actualiza la app e inicia sesión una vez en el teléfono original para sincronizarlo. Si ya no lo tienes, contacta con el responsable."
+            ErrorAuth.PERFIL_NO_DISPONIBLE -> "No se pueden leer los datos de esta cuenta. Contacta con el responsable para recuperarlos."
+            ErrorAuth.COMPLETAR_PERFIL -> "Completa los datos de tu cuenta para continuar."
             ErrorAuth.PERFIL_SINCRONIZACION_PENDIENTE -> "La cuenta se creó, pero falta sincronizar el perfil. No vuelvas a registrarte: inicia sesión en este teléfono con conexión para completar el proceso."
             ErrorAuth.VINCULACION_NECESARIA -> "El correo ya tiene otra contraseña en el servicio de acceso. Contacta con el responsable para vincular tu cuenta anterior."
             ErrorAuth.DEMASIADAS_SOLICITUDES -> "Demasiadas solicitudes. Espera unos minutos antes de volver a intentarlo."

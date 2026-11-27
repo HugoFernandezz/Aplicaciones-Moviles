@@ -59,7 +59,8 @@ class FirestorePerfilCuentaService @Inject constructor(
         uid = id, nombre = texto("nombre"), apellidos = texto("apellidos"),
         empresaId = texto("empresaId"), empresaNombre = texto("empresaNombre"),
         sector = texto("sector"), creadaEn = getLong("creadaEn") ?: throw ErrorServicioAuth(ErrorAuth.PERFIL_NO_DISPONIBLE),
-        telefono = texto("telefono"), dni = texto("dni"), cargo = texto("cargo"), direccion = getString("direccion").orEmpty(), telefonoRegion = getString("telefonoRegion")
+        telefono = getString("telefono").orEmpty(), dni = getString("dni").orEmpty(), cargo = getString("cargo").orEmpty(),
+        direccion = getString("direccion").orEmpty(), telefonoRegion = getString("telefonoRegion")
     ).also {
         if (it.empresaId != it.uid) throw ErrorServicioAuth(ErrorAuth.PERFIL_NO_DISPONIBLE)
     }
