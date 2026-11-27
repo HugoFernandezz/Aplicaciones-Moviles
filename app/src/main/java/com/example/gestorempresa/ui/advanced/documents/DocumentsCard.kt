@@ -16,7 +16,8 @@ import com.example.gestorempresa.data.media.AttachmentStorage
 import com.example.gestorempresa.ui.home.ChoiceField
 import com.example.gestorempresa.ui.home.HomeWorkspaceState
 import com.example.gestorempresa.ui.home.HomeWorkspaceViewModel
-import com.example.gestorempresa.ui.home.validDate
+import com.example.gestorempresa.ui.advanced.forms.DateField
+import com.example.gestorempresa.ui.advanced.forms.dateError
 import java.time.LocalDate
 
 /** Tipos de documento que se pueden adjuntar y su nombre visible. */
@@ -121,8 +122,7 @@ private fun AttachDocumentDialog(categories: List<String>, saving: Boolean, save
                 ChoiceField("Tipo", categoryLabel(category), categories.map(::categoryLabel), !saving) { label ->
                     category = categories.first { categoryLabel(it) == label }
                 }
-                OutlinedTextField(expiresAt, { expiresAt = it.filter { c -> c.isDigit() || c == '-' }.take(10) },
-                    label = { Text("Caduca el (AAAA-MM-DD, opcional)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                DateField("Caduca el", expiresAt, { expiresAt = it }, enabled = !saving, showErrors = error != null)
                 Text("Si indicas una fecha, aparecerá en Avisos y en el Calendario antes de que caduque.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 (error ?: saveError)?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -130,7 +130,8 @@ private fun AttachDocumentDialog(categories: List<String>, saving: Boolean, save
         },
         confirmButton = {
             Button(enabled = !saving, onClick = {
-                if (expiresAt.isNotBlank() && !validDate(expiresAt)) error = "La fecha debe tener el formato AAAA-MM-DD."
+                val dateProblem = dateError(expiresAt, required = false)
+                if (dateProblem != null) error = dateProblem
                 else onConfirm(name.trim(), category, expiresAt.ifBlank { null })
             }) { Text(if (saving) "Guardando…" else "Guardar") }
         },

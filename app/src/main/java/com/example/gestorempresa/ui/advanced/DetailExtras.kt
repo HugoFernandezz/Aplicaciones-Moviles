@@ -14,6 +14,8 @@ import com.example.gestorempresa.data.media.AttachmentStorage
 import com.example.gestorempresa.ui.advanced.communication.ContactCard
 import com.example.gestorempresa.ui.advanced.communication.ContactInfo
 import com.example.gestorempresa.ui.advanced.documents.DocumentsCard
+import com.example.gestorempresa.ui.advanced.forms.DateField
+import com.example.gestorempresa.ui.advanced.forms.dateError
 import com.example.gestorempresa.ui.advanced.documents.writeProjectReport
 import com.example.gestorempresa.ui.advanced.map.ProjectMapCard
 import com.example.gestorempresa.ui.advanced.media.PhotosCard
@@ -143,7 +145,7 @@ private fun MaterialUsageCard(projectId: Long, state: HomeWorkspaceState, worksp
                     SelectionField("Material", materialId, state.materials.map { it.id to "${it.nombreMaterial} (${"%.2f".format(it.precioUnitario)} €/${it.unidadMedida})" }, !saving) { materialId = it }
                     OutlinedTextField(quantity, { quantity = it.filter { c -> c.isDigit() || c == ',' || c == '.' } },
                         label = { Text("Cantidad${selected?.let { " (${it.unidadMedida})" }.orEmpty()}") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(date, { date = it }, label = { Text("Fecha (AAAA-MM-DD)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    DateField("Fecha de uso", date, { date = it }, required = true, enabled = !saving, showErrors = error != null)
                     error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 }
             },
@@ -153,7 +155,7 @@ private fun MaterialUsageCard(projectId: Long, state: HomeWorkspaceState, worksp
                     when {
                         selected == null -> error = "Elige un material."
                         amount == null || amount <= 0 || !amount.isFinite() -> error = "Indica una cantidad mayor que 0."
-                        !validDate(date) -> error = "La fecha debe tener el formato AAAA-MM-DD."
+                        dateError(date, required = true) != null -> error = dateError(date, required = true)
                         else -> workspace.save({
                             addMaterialUse(ConsumoMaterialEntity(unidadTrabajoId = projectId, materialId = selected.id, cantidad = amount,
                                 precioUnitarioAplicado = selected.precioUnitario, fecha = date))
