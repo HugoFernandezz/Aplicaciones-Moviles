@@ -75,6 +75,19 @@ class AttachmentStorage(context: Context, companyId: Long) {
         if (file.canonicalPath.startsWith(folder.canonicalPath + File.separator)) file.delete()
     }
 
+    companion object {
+        /**
+         * Borra fotos temporales (cámara y ajuste) de más de un día. Quedan si Android cierra la app
+         * a mitad de una captura, y pueden contener imágenes personales.
+         */
+        suspend fun cleanTemporaryFiles(context: Context, maxAgeMillis: Long = 24L * 60 * 60 * 1000) = withContext(Dispatchers.IO) {
+            val limit = System.currentTimeMillis() - maxAgeMillis
+            listOf("camara", "ajuste_fotos").forEach { name ->
+                File(context.cacheDir, name).listFiles()?.filter { it.isFile && it.lastModified() < limit }?.forEach { it.delete() }
+            }
+        }
+    }
+
     private fun newFile(prefix: String, extension: String): File {
         folder.mkdirs()
         val safePrefix = prefix.replace(Regex("[^A-Za-z0-9_-]"), "_")

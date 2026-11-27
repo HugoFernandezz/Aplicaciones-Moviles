@@ -98,6 +98,10 @@ object DueDateNotifications {
             .setStyle(style)
             .setContentIntent(open)
             .setAutoCancel(true)
+            // En la pantalla de bloqueo no se muestran nombres ni documentos (datos personales).
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(NotificationCompat.Builder(context, CHANNEL_ID).setSmallIcon(R.drawable.ic_notification_due)
+                .setContentTitle("Vencimientos pendientes").setContentText("Desbloquea el móvil para ver los detalles").build())
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .build()
         try { manager.notify(NOTIFICATION_ID, notification) } catch (_: SecurityException) { }

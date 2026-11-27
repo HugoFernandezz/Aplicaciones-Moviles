@@ -46,6 +46,7 @@ fun HomeListsContent(session: SesionUsuario, modifier: Modifier = Modifier,
     val dao = remember(companyId) { HomeDatabase.forCompany(context, companyId).homeDao() }
     // Fotos y documentos de la empresa (funciones avanzadas).
     val storage = remember(companyId) { AttachmentStorage(context, companyId) }
+    LaunchedEffect(Unit) { AttachmentStorage.cleanTemporaryFiles(context) }
     val factory = remember(dao) {
         object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
