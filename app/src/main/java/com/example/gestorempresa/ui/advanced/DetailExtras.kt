@@ -13,6 +13,7 @@ import com.example.gestorempresa.data.local.entities.ConsumoMaterialEntity
 import com.example.gestorempresa.data.media.AttachmentStorage
 import com.example.gestorempresa.ui.advanced.communication.ContactCard
 import com.example.gestorempresa.ui.advanced.communication.ContactInfo
+import com.example.gestorempresa.ui.advanced.communication.MessageTemplateStore
 import com.example.gestorempresa.ui.advanced.documents.DocumentsCard
 import com.example.gestorempresa.ui.advanced.forms.DateField
 import com.example.gestorempresa.ui.advanced.forms.dateError
@@ -51,19 +52,20 @@ fun HomeWorkspaceState.filesOwnedBy(selection: CatalogSelection): List<String> {
 
 /** Parte superior de la ficha: foto (cámara/galería) y botones de comunicación (WhatsApp/Email/llamar). */
 @Composable
-fun AdvancedDetailHeader(selection: CatalogSelection, state: HomeWorkspaceState, workspace: HomeWorkspaceViewModel, storage: AttachmentStorage) {
+fun AdvancedDetailHeader(selection: CatalogSelection, state: HomeWorkspaceState, workspace: HomeWorkspaceViewModel, storage: AttachmentStorage,
+    templates: MessageTemplateStore) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         when (selection.kind) {
             CatalogKind.EMPLOYEES -> state.employees.firstOrNull { it.id == selection.id }?.let { e ->
                 WorkerPhotoHeader("EMPLEADO", e.id, e.fotoUrl, "${e.nombre.take(1)}${e.apellidos.take(1)}".uppercase(), storage, workspace)
-                ContactCard(ContactInfo("EMPLEADO", e.id, "${e.nombre} ${e.apellidos}", e.telefono, e.email), state)
+                ContactCard(ContactInfo("EMPLEADO", e.id, "${e.nombre} ${e.apellidos}", e.telefono, e.email), state, templates)
             }
             CatalogKind.SUBCONTRACTORS -> state.subcontractors.firstOrNull { it.id == selection.id }?.let { s ->
                 WorkerPhotoHeader("SUBCONTRATADO", s.id, s.fotoUrl, s.nombreComercial.take(2).uppercase(), storage, workspace)
-                ContactCard(ContactInfo("SUBCONTRATADO", s.id, s.personaContacto.ifBlank { s.nombreComercial }, s.telefono, s.email), state)
+                ContactCard(ContactInfo("SUBCONTRATADO", s.id, s.personaContacto.ifBlank { s.nombreComercial }, s.telefono, s.email), state, templates)
             }
             CatalogKind.SUPPLIERS -> state.suppliers.firstOrNull { it.id == selection.id }?.let { p ->
-                ContactCard(ContactInfo("PROVEEDOR", p.id, p.personaContacto.ifBlank { p.nombreEmpresa }, p.telefono, p.email), state)
+                ContactCard(ContactInfo("PROVEEDOR", p.id, p.personaContacto.ifBlank { p.nombreEmpresa }, p.telefono, p.email), state, templates)
             }
             else -> Unit
         }

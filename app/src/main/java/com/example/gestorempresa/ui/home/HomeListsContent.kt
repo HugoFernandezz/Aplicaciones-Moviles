@@ -47,6 +47,8 @@ fun HomeListsContent(session: SesionUsuario, modifier: Modifier = Modifier,
     // Fotos y documentos de la empresa (funciones avanzadas).
     val storage = remember(companyId) { AttachmentStorage(context, companyId) }
     LaunchedEffect(Unit) { AttachmentStorage.cleanTemporaryFiles(context) }
+    // Plantillas de mensajes guardadas por la empresa.
+    val templates = com.example.gestorempresa.ui.advanced.communication.rememberTemplateStore(companyId)
     val factory = remember(dao) {
         object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -181,7 +183,7 @@ fun HomeListsContent(session: SesionUsuario, modifier: Modifier = Modifier,
                                 onBack = { goBack() },
                                 onOpenRelated = { selectedDetail = it },
                                 listState = detailListState,
-                                header = { AdvancedDetailHeader(selectedDetail!!, state, workspace, storage) },
+                                header = { AdvancedDetailHeader(selectedDetail!!, state, workspace, storage, templates) },
                                 footer = {
                                     AdvancedDetailFooter(selectedDetail!!, state, workspace, storage, session.empresa.nombre,
                                         onOpenAttachment = { viewingAttachmentId = it.id },
@@ -215,7 +217,7 @@ fun HomeListsContent(session: SesionUsuario, modifier: Modifier = Modifier,
                                     }
                                 }
                             )
-                            destination == "messaging" -> MessagingScreen(state) { navigate("home") }
+                            destination == "messaging" -> MessagingScreen(state, templates) { navigate("home") }
                             destination == "map" -> ProjectsMapScreen(state,
                                 onOpenProject = { selectedDetail = CatalogSelection(CatalogKind.PROJECTS, it) },
                                 onPickLocation = { pickingLocationId = it })

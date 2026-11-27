@@ -16,6 +16,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import com.example.gestorempresa.ui.advanced.communication.*
@@ -27,10 +28,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun MessagingScreen(state: HomeWorkspaceState, onBack: () -> Unit) {
+fun MessagingScreen(state: HomeWorkspaceState, templateStore: MessageTemplateStore, onBack: () -> Unit) {
     val context = LocalContext.current
     // Plantillas compartidas con el botón de comunicación de las fichas (funciones avanzadas).
-    val templates = messageTemplates.associate { it.title to it.text }
+    // Mismas plantillas que en las fichas, con los cambios que el administrador haya guardado.
+    val templates = templateStore.templates.collectAsState().value.associate { it.title to it.text }
     var selectedTemplate by rememberSaveable { mutableStateOf(templates.keys.first()) }
     var message by rememberSaveable { mutableStateOf(templates.values.first()) }
     var composingFor by remember { mutableStateOf<Contact?>(null) }
@@ -75,7 +77,7 @@ fun MessagingScreen(state: HomeWorkspaceState, onBack: () -> Unit) {
     composingFor?.let { person ->
         // Los subcontratados usan id negativo en esta lista para no chocar con los empleados.
         MessageComposerDialog(ContactInfo(if (person.id < 0) "SUBCONTRATADO" else "EMPLEADO", kotlin.math.abs(person.id), person.name,
-            person.phone, person.email), state) { composingFor = null }
+            person.phone, person.email), state, templateStore) { composingFor = null }
     }
 }
 

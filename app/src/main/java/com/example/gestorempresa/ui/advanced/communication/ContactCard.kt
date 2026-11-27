@@ -50,7 +50,7 @@ fun suggestedValues(state: HomeWorkspaceState, contact: ContactInfo, template: M
 
 /** Botones de comunicación de la ficha: llamar y enviar mensaje por WhatsApp, email o ambos. */
 @Composable
-fun ContactCard(contact: ContactInfo, state: HomeWorkspaceState) {
+fun ContactCard(contact: ContactInfo, state: HomeWorkspaceState, templates: MessageTemplateStore) {
     val context = LocalContext.current
     var composing by rememberSaveable { mutableStateOf(false) }
     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
@@ -64,7 +64,7 @@ fun ContactCard(contact: ContactInfo, state: HomeWorkspaceState) {
             }
         }
     }
-    if (composing) MessageComposerDialog(contact, state) { composing = false }
+    if (composing) MessageComposerDialog(contact, state, templates) { composing = false }
 }
 
 /**
@@ -72,11 +72,14 @@ fun ContactCard(contact: ContactInfo, state: HomeWorkspaceState) {
  * y lo envía por el medio elegido: WhatsApp, Email o WhatsApp + Email.
  */
 @Composable
-fun MessageComposerDialog(contact: ContactInfo, state: HomeWorkspaceState, onDismiss: () -> Unit) {
+fun MessageComposerDialog(contact: ContactInfo, state: HomeWorkspaceState, templates: MessageTemplateStore, onDismiss: () -> Unit) {
     val context = LocalContext.current
-    var templateTitle by rememberSaveable { mutableStateOf(messageTemplates.first().title) }
-    val template = messageTemplates.first { it.title == templateTitle }
+    val available by templates.templates.collectAsState()
+    var templateTitle by rememberSaveable { mutableStateOf(available.first().title) }
+    val template = available.first { it.title == templateTitle }
+    // Texto de ESTE mensaje: empieza como la plantilla; cambiarlo no modifica la plantilla guardada.
     var text by rememberSaveable(templateTitle) { mutableStateOf(template.text) }
+    var savedNotice by remember { mutableStateOf<String?>(null) }
     val suggestions = remember(templateTitle, state) { suggestedValues(state, contact, template) }
     val values = remember(templateTitle) { mutableStateMapOf<String, String>().apply { putAll(suggestions) } }
     var subject by rememberSaveable { mutableStateOf("Mensaje de la empresa") }
@@ -89,9 +92,15 @@ fun MessageComposerDialog(contact: ContactInfo, state: HomeWorkspaceState, onDis
     AlertDialog(onDismissRequest = onDismiss, title = { Text("Mensaje para ${contact.name}") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                ChoiceField("Plantilla", templateTitle, messageTemplates.map { it.title }, true) { templateTitle = it }
+                ChoiceField("Plantilla", templateTitle, available.map { it.title }, true) { templateTitle = it; savedNotice = null }
                 OutlinedTextField(text, { text = it }, label = { Text(if (template.title == CUSTOM_TEMPLATE) "Escribe tu mensaje" else "Texto de la plantilla") },
                     minLines = 3, modifier = Modifier.fillMaxWidth())
+                if (template.title != CUSTOM_TEMPLATE) TemplateEditActions(edited = text != template.text, customized = templates.isCustomized(template.title),
+                    onSaveTemplate = { templates.save(template.title, text); savedNotice = "Plantilla guardada para futuros mensajes." },
+                    onUndoEdit = { text = template.text },
+                    onRestore = { templates.restore(template.title); text = messageTemplates.first { it.title == template.title }.text
+                        savedNotice = "Se ha restaurado la plantilla original." })
+                savedNotice?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
                 if (template.title == CUSTOM_TEMPLATE) Text("Puedes usar huecos como [NOMBRE] o [FECHA] y se rellenarán abajo.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 placeholders.forEach { key ->
@@ -124,4 +133,26 @@ fun MessageComposerDialog(contact: ContactInfo, state: HomeWorkspaceState, onDis
             }
         },
         confirmButton = {}, dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } })
+}
+
+/**
+ * Diferencia las dos formas de cambiar una plantilla:
+ * - Editar solo este mensaje (lo que ya ocurre al escribir en el campo).
+ * - Guardar cambios en plantilla: se conserva para los próximos mensajes, también tras cerrar la app.
+ */
+@Composable
+private fun TemplateEditActions(edited: Boolean, customized: Boolean, onSaveTemplate: () -> Unit, onUndoEdit: () -> Unit, onRestore: () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        if (edited) {
+            Text("✏️ Has editado este mensaje. La plantilla no cambia a menos que la guardes.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(onClick = onSaveTemplate) { Text("Guardar cambios en plantilla") }
+                TextButton(onClick = onUndoEdit) { Text("Deshacer") }
+            }
+        } else if (customized) Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Text("Plantilla modificada por ti.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            TextButton(onClick = onRestore) { Text("Restaurar original") }
+        }
+    }
 }
