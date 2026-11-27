@@ -3,6 +3,13 @@ package com.example.gestorempresa.data.local
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
+/** Mantiene los IDs y los datos existentes; el UID estable se asigna al sincronizar. */
+val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE empresas ADD COLUMN remoteId TEXT")
+    }
+}
+
 /** Conserva usuarios, empresas y sesiones existentes al incorporar identidad remota. */
 val MIGRATION_2_3 = object : Migration(2, 3) {
     override fun migrate(db: SupportSQLiteDatabase) {

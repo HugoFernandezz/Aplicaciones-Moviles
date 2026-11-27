@@ -18,7 +18,7 @@ import com.example.gestorempresa.data.local.entities.*
                 UsuarioEntity::class, SesionEntity::class,
                 PerfilEntity::class, AjustesEntity::class
                ],
-    version = 5,
+    version = 7,
     exportSchema = true
 )
 
@@ -39,7 +39,7 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "gestor_empresa_db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).build()
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7).build()
                 INSTANCE = instance
                 instance
             }

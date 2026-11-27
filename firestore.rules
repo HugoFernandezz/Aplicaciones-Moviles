@@ -1,0 +1,32 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // El modelo actual registra un administrador y su propia empresa por cuenta.
+    // No concede roles ni acceso a empresas de otros usuarios.
+    match /authProfiles/{uid} {
+      function owner() { return request.auth != null && request.auth.uid == uid; }
+      function text(value, min, max) {
+        return value is string && value.size() >= min && value.size() <= max;
+      }
+      function valid() {
+        let d = request.resource.data;
+        return d.keys().hasAll(['nombre', 'apellidos', 'empresaId', 'empresaNombre', 'sector', 'creadaEn', 'telefono', 'dni', 'cargo'])
+          && d.keys().hasOnly(['nombre', 'apellidos', 'empresaId', 'empresaNombre', 'sector', 'creadaEn', 'telefono', 'dni', 'cargo', 'direccion', 'telefonoRegion'])
+          && d.empresaId == uid
+          && text(d.nombre, 2, 60) && text(d.apellidos, 2, 100)
+          && text(d.empresaNombre, 2, 120)
+          && d.sector in ['Construcción', 'Limpieza', 'Mantenimiento', 'Reformas', 'Servicios técnicos', 'Peluquería', 'Otro']
+          && d.creadaEn is int && d.creadaEn >= 0
+          && text(d.telefono, 0, 20) && text(d.dni, 0, 10) && text(d.cargo, 0, 60)
+          && (!('direccion' in d) || text(d.direccion, 0, 240))
+          && (!('telefonoRegion' in d) || (d.telefonoRegion is string && d.telefonoRegion.matches('^[A-Z]{2}$')));
+      }
+      allow get: if owner();
+      allow create: if owner() && valid();
+      allow update: if owner() && valid()
+        && request.resource.data.empresaId == resource.data.empresaId
+        && request.resource.data.creadaEn == resource.data.creadaEn;
+      allow list, delete: if false;
+    }
+  }
+}

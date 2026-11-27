@@ -6,6 +6,8 @@ import com.example.gestorempresa.data.auth.RoomAuthRepository
 import com.example.gestorempresa.data.auth.FirebaseAuthRepository
 import com.example.gestorempresa.data.auth.FirebaseEmailAuthService
 import com.example.gestorempresa.domain.auth.EmailAuthService
+import com.example.gestorempresa.domain.auth.PerfilCuentaService
+import com.example.gestorempresa.data.auth.FirestorePerfilCuentaService
 import com.example.gestorempresa.data.local.AppDatabase
 import com.example.gestorempresa.domain.auth.AuthRepository
 import dagger.Binds
@@ -30,4 +32,5 @@ object AuthDataModule {
 abstract class AuthBindingModule {
     @Binds @Singleton abstract fun repository(impl: FirebaseAuthRepository): AuthRepository
     @Binds @Singleton abstract fun emailService(impl: FirebaseEmailAuthService): EmailAuthService
+    @Binds @Singleton abstract fun perfilService(impl: FirestorePerfilCuentaService): PerfilCuentaService
 }

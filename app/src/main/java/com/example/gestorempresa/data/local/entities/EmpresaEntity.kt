@@ -8,5 +8,6 @@ data class EmpresaEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val nombre: String,
     val sector: String,
-    val creadaEn: Long
+    val creadaEn: Long,
+    val remoteId: String? = null
 )

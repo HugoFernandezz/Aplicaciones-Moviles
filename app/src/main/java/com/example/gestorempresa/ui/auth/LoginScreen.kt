@@ -23,7 +23,6 @@ fun LoginScreen(state: AuthUiState, onEmailChange: (String) -> Unit, onPasswordC
         AuthSubmit("Iniciar sesión", state.ocupado, onLogin)
         TextButton(onClick = onRecovery, enabled = !state.ocupado, modifier = Modifier.fillMaxWidth()) { Text("He olvidado mi contraseña") }
         TextButton(onClick = onRegister, enabled = !state.ocupado, modifier = Modifier.fillMaxWidth()) { Text("¿Primera vez? Crea tu cuenta") }
-        Text("Los datos de tu empresa se guardan en este dispositivo.")
     }
 }
 

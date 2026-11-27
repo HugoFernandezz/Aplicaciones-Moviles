@@ -1,15 +1,13 @@
 package com.example.gestorempresa.domain.profile
 
 import com.example.gestorempresa.domain.auth.AuthValidator
+import com.example.gestorempresa.domain.phone.InternationalPhones
 
 /**
  * Reglas de validación del formulario de Perfil.
  * Devuelve un mapa vacío si todo es correcto, o un mensaje de error por cada campo incorrecto.
  */
 object PerfilValidator {
-
-    /** Teléfono opcional: dígitos, espacios y un "+" inicial (ej: "+34 600 123 456"). */
-    private val telefonoPattern = Regex("^\\+?[0-9 ]{9,20}$")
 
     /** DNI (8 números + letra) o NIE (X/Y/Z + 7 números + letra). */
     private val dniPattern = Regex("^[XYZxyz]?[0-9]{7,8}[A-Za-z]$")
@@ -23,19 +21,22 @@ object PerfilValidator {
 
         // Campos opcionales: solo se validan si se han rellenado.
         val telefono = datos.telefono.trim()
-        if (telefono.isNotEmpty() && !telefonoPattern.matches(telefono)) put(CampoPerfil.TELEFONO, "Introduce un teléfono válido.")
+        if (InternationalPhones.countries.none { it.region == datos.telefonoRegion }) put(CampoPerfil.TELEFONO, "Selecciona un país válido.")
+        if (telefono.isNotEmpty() && InternationalPhones.toE164(telefono, datos.telefonoRegion) == null) put(CampoPerfil.TELEFONO, "Introduce un teléfono válido para el país seleccionado.")
         val dni = datos.dni.trim()
         if (dni.isNotEmpty() && !dniPattern.matches(dni)) put(CampoPerfil.DNI, "Introduce un DNI o NIE válido.")
         if (datos.cargo.trim().length > 60) put(CampoPerfil.CARGO, "El cargo admite hasta 60 caracteres.")
+        if (datos.direccion.trim().length > 240) put(CampoPerfil.DIRECCION, "La dirección admite hasta 240 caracteres.")
     }
 
     /** Limpia espacios sobrantes y pone el DNI en mayúsculas antes de guardar. */
     fun normalizar(datos: DatosPerfil) = datos.copy(
         nombre = datos.nombre.trim(),
         apellidos = datos.apellidos.trim(),
-        telefono = datos.telefono.trim(),
+        telefono = if (datos.telefono.isBlank()) "" else InternationalPhones.toE164(datos.telefono, datos.telefonoRegion) ?: datos.telefono.trim(),
         dni = datos.dni.trim().uppercase(),
         cargo = datos.cargo.trim(),
-        empresaNombre = datos.empresaNombre.trim()
+        empresaNombre = datos.empresaNombre.trim(),
+        direccion = datos.direccion.trim()
     )
 }

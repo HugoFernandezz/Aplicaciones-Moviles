@@ -28,6 +28,7 @@ object AuthValidator {
         if (datos.empresa.trim().length !in 2..120) put(CampoAuth.EMPRESA, "La empresa debe tener entre 2 y 120 caracteres.")
         if (datos.sector !in sectores) put(CampoAuth.SECTOR, "Selecciona un sector.")
         if (datos.password.length !in 12..128) put(CampoAuth.PASSWORD, "Utiliza entre 12 y 128 caracteres; puedes usar una frase.")
-        if (datos.password != datos.confirmarPassword) put(CampoAuth.CONFIRMACION, "Las contraseñas no coinciden.")
+        if (datos.confirmarPassword.isEmpty()) put(CampoAuth.CONFIRMACION, "Repite la contraseña.")
+        else if (datos.password != datos.confirmarPassword) put(CampoAuth.CONFIRMACION, "Las contraseñas no coinciden.")
     }
 }

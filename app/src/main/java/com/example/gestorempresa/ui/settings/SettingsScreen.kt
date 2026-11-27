@@ -3,6 +3,14 @@ package com.example.gestorempresa.ui.settings
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.ui.platform.LocalContext
+import android.content.Intent
+import android.provider.Settings
+import com.example.gestorempresa.ui.advanced.dates.DueDateNotifications
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -31,9 +39,13 @@ fun SettingsScreen(
     viewModel: SettingsViewModel,
     onAbrirPerfil: () -> Unit,
     onCerrarSesion: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    seccionInicial: String? = null
 ) {
     val state by viewModel.ui.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    var notifications by remember { mutableStateOf(DueDateNotifications.canNotify(context)) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { notifications = DueDateNotifications.canNotify(context) }
     SettingsContent(
         state = state,
         onAvisosVencimientos = viewModel::cambiarAvisosVencimientos,
@@ -44,7 +56,10 @@ fun SettingsScreen(
         onAbrirPerfil = onAbrirPerfil,
         onCerrarSesion = onCerrarSesion,
         onMensajeMostrado = viewModel::mensajeMostrado,
-        modifier = modifier
+        modifier = modifier, seccionInicial = seccionInicial, notificacionesPermitidas = notifications,
+        onAbrirNotificacionesSistema = {
+            context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName))
+        }
     )
 }
 
@@ -60,9 +75,20 @@ fun SettingsContent(
     onAbrirPerfil: () -> Unit,
     onCerrarSesion: () -> Unit,
     onMensajeMostrado: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    seccionInicial: String? = null,
+    notificacionesPermitidas: Boolean = true,
+    onAbrirNotificacionesSistema: (() -> Unit)? = null
 ) {
     val snackbar = remember { SnackbarHostState() }
+    val securityAnchor = remember { BringIntoViewRequester() }
+    val notificationsAnchor = remember { BringIntoViewRequester() }
+    LaunchedEffect(seccionInicial, state.cargando) {
+        if (!state.cargando) when (seccionInicial) {
+            "security" -> securityAnchor.bringIntoView()
+            "notifications" -> notificationsAnchor.bringIntoView()
+        }
+    }
     LaunchedEffect(state.mensaje) {
         state.mensaje?.let {
             snackbar.showSnackbar(it)
@@ -89,14 +115,21 @@ fun SettingsContent(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text("Ajustes", style = MaterialTheme.typography.headlineMedium)
-            SeccionNotificaciones(state.ajustes, onAvisosVencimientos, onDiasAntelacion, onAvisosTareas)
+            Column(Modifier.bringIntoViewRequester(notificationsAnchor)) {
+                SeccionNotificaciones(state.ajustes, onAvisosVencimientos, onDiasAntelacion, onAvisosTareas)
+                if (!notificacionesPermitidas) Text("Las notificaciones están desactivadas en Android.")
+                onAbrirNotificacionesSistema?.let { action ->
+                    TextButton(onClick = action) { Text("Ajustes de notificaciones de Android") }
+                }
+            }
+            if (state.guardando) LinearProgressIndicator(Modifier.fillMaxWidth())
             SeccionPreferencias(state.ajustes.tema, onTema)
             SeccionCuenta(state, onAbrirPerfil)
-            SeccionSeguridad(
+            Column(Modifier.bringIntoViewRequester(securityAnchor)) { SeccionSeguridad(
                 state = state,
                 onCambiarPassword = { confirmarPassword = true },
                 onCerrarSesion = { confirmarCierre = true }
-            )
+            ) }
             Text(
                 "Gestor Empresa · versión ${BuildConfig.VERSION_NAME}",
                 style = MaterialTheme.typography.bodySmall,
@@ -180,14 +213,17 @@ private fun SeccionCuenta(state: SettingsUiState, onAbrirPerfil: () -> Unit) {
     SettingsSection("Cuenta") {
         SettingsInfoRow("Correo electrónico", state.email)
         SettingsInfoRow("Empresa", state.empresa)
-        OutlinedButton(onClick = onAbrirPerfil, modifier = Modifier.fillMaxWidth()) { Text("Editar perfil") }
+        OutlinedButton(onClick = onAbrirPerfil, modifier = Modifier.fillMaxWidth()) { Text("Editar datos") }
     }
 }
 
 @Composable
 private fun SeccionSeguridad(state: SettingsUiState, onCambiarPassword: () -> Unit, onCerrarSesion: () -> Unit) {
     SettingsSection("Seguridad") {
-        state.sesionExpiraEn?.let { SettingsInfoRow("Sesión válida hasta", formatearFecha(it)) }
+        state.sesionExpiraEn?.let {
+            if (it == Long.MAX_VALUE) SettingsInfoRow("Sesión", "Se mantiene hasta cerrar sesión o hasta que el servicio la invalide.")
+            else SettingsInfoRow("Sesión válida hasta", formatearFecha(it))
+        }
         OutlinedButton(onClick = onCambiarPassword, enabled = !state.enviandoCorreo, modifier = Modifier.fillMaxWidth()) {
             Text(if (state.enviandoCorreo) "Enviando correo…" else "Cambiar contraseña")
         }

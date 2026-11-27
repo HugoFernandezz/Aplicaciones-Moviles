@@ -51,11 +51,12 @@ internal fun AuthLayout(title: String, description: String, content: @Composable
 
 @Composable
 internal fun AuthTextField(value: String, onValueChange: (String) -> Unit, label: String,
-    error: String? = null, enabled: Boolean = true, keyboardType: KeyboardType = KeyboardType.Text
+    error: String? = null, enabled: Boolean = true, keyboardType: KeyboardType = KeyboardType.Text,
+    modifier: Modifier = Modifier
 ) {
     OutlinedTextField(
         value = value, onValueChange = onValueChange, label = { Text(label) },
-        modifier = Modifier.fillMaxWidth(), singleLine = true, enabled = enabled,
+        modifier = modifier.fillMaxWidth(), singleLine = true, enabled = enabled,
         isError = error != null, supportingText = { if (error != null) Text(error) },
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType, imeAction = ImeAction.Next)
     )
@@ -63,12 +64,13 @@ internal fun AuthTextField(value: String, onValueChange: (String) -> Unit, label
 
 @Composable
 internal fun AuthPasswordField(value: String, onValueChange: (String) -> Unit, label: String,
-    error: String? = null, enabled: Boolean = true, done: Boolean = false, onDone: () -> Unit = {}
+    error: String? = null, enabled: Boolean = true, done: Boolean = false, onDone: () -> Unit = {},
+    modifier: Modifier = Modifier
 ) {
     var visible by remember { mutableStateOf(false) }
     OutlinedTextField(
         value = value, onValueChange = onValueChange, label = { Text(label) },
-        modifier = Modifier.fillMaxWidth(), singleLine = true, enabled = enabled,
+        modifier = modifier.fillMaxWidth(), singleLine = true, enabled = enabled,
         isError = error != null, supportingText = { if (error != null) Text(error) },
         visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
         trailingIcon = { TextButton(onClick = { visible = !visible }, enabled = enabled) { Text(if (visible) "Ocultar" else "Mostrar") } },

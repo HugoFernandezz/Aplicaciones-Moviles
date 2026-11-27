@@ -1,6 +1,7 @@
 package com.example.gestorempresa.domain.profile
 
 import com.example.gestorempresa.domain.auth.Empresa
+import com.example.gestorempresa.domain.phone.InternationalPhones
 
 /**
  * Información completa del administrador que se muestra en la pantalla de Perfil.
@@ -21,7 +22,9 @@ data class PerfilAdministrador(
     val cargo: String,
     /** Ruta del archivo de la foto en el almacenamiento interno. Null = avatar por defecto. */
     val fotoRuta: String?,
-    val empresa: Empresa
+    val empresa: Empresa,
+    val direccion: String = "",
+    val telefonoRegion: String? = null
 ) {
     val nombreCompleto: String get() = "$nombre $apellidos".trim()
 
@@ -40,19 +43,23 @@ data class DatosPerfil(
     val dni: String = "",
     val cargo: String = "",
     val empresaNombre: String = "",
-    val sector: String = ""
+    val sector: String = "",
+    val direccion: String = "",
+    val telefonoRegion: String = "ES"
 )
 
 /** Identifica cada campo del formulario para poder asociarle un mensaje de error. */
-enum class CampoPerfil { NOMBRE, APELLIDOS, TELEFONO, DNI, CARGO, EMPRESA, SECTOR }
+enum class CampoPerfil { NOMBRE, APELLIDOS, TELEFONO, DNI, CARGO, EMPRESA, SECTOR, DIRECCION }
 
 /** Convierte el perfil guardado en los datos iniciales del formulario de edición. */
 fun PerfilAdministrador.toDatosPerfil() = DatosPerfil(
     nombre = nombre,
     apellidos = apellidos,
-    telefono = telefono,
+    telefono = InternationalPhones.restore(telefono).number,
     dni = dni,
     cargo = cargo,
     empresaNombre = empresa.nombre,
-    sector = empresa.sector
+    sector = empresa.sector,
+    direccion = direccion,
+    telefonoRegion = telefonoRegion ?: InternationalPhones.restore(telefono).region
 )

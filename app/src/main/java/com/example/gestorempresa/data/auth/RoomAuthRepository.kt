@@ -32,7 +32,7 @@ class RoomAuthRepository @Inject constructor(
     // El reloj vuelve a evaluar la caducidad aunque no cambie ninguna fila de Room.
     override val sesion = combine(dao.observarSesion(), flow {
         while (true) { emit(clock.millis()); delay(1_000) }
-    }) { row, ahora -> row?.takeIf { it.expiraEn > ahora }?.toDomain() }.distinctUntilChanged()
+    }) { row, ahora -> row?.takeIf { it.firebaseUid != null || it.expiraEn > ahora }?.toDomain() }.distinctUntilChanged()
 
     override suspend fun registrar(datos: RegistroUsuario): ResultadoAuth = ejecutar {
         if (AuthValidator.validarRegistro(datos).isNotEmpty()) return@ejecutar ResultadoAuth.Error(ErrorAuth.DATOS_INVALIDOS)

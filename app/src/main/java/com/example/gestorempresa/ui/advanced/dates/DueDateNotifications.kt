@@ -44,6 +44,7 @@ object DueDateNotifications {
         var next = now.toLocalDate().atTime(LocalTime.of(9, 0))
         if (!next.isAfter(now)) next = next.plusDays(1)
         val request = PeriodicWorkRequestBuilder<DueDateWorker>(Duration.ofDays(1))
+            .addTag(WORK_NAME)
             .setInitialDelay(Duration.between(now, next))
             .setInputData(inputData(companyId, warnDays, expiries, tasks))
             .build()
@@ -53,20 +54,22 @@ object DueDateNotifications {
     /** Revisa las fechas ahora mismo (botón del calendario). */
     fun runNow(context: Context, companyId: Long, warnDays: Int, expiries: Boolean, tasks: Boolean) {
         WorkManager.getInstance(context).enqueue(OneTimeWorkRequestBuilder<DueDateWorker>()
+            .addTag(WORK_NAME)
             .setInputData(inputData(companyId, warnDays, expiries, tasks)).build())
     }
 
     /** Al cerrar sesión no se deben mostrar datos de la empresa. */
     fun cancel(context: Context) {
         WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
+        WorkManager.getInstance(context).cancelAllWorkByTag(WORK_NAME)
         NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID)
     }
 
     private fun inputData(companyId: Long, warnDays: Int, expiries: Boolean, tasks: Boolean) = workDataOf(
         KEY_COMPANY to companyId, KEY_DAYS to warnDays, KEY_EXPIRIES to expiries, KEY_TASKS to tasks)
 
-    fun canNotify(context: Context): Boolean = Build.VERSION.SDK_INT < 33 ||
-        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+    fun canNotify(context: Context): Boolean = NotificationManagerCompat.from(context).areNotificationsEnabled() &&
+        (Build.VERSION.SDK_INT < 33 || ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED)
 
     internal fun show(context: Context, items: List<DueItem>, today: LocalDate, warnDays: Int) {
         val manager = NotificationManagerCompat.from(context)

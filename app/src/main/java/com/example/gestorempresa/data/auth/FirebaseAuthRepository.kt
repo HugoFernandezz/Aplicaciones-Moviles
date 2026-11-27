@@ -9,9 +9,7 @@ import java.time.Clock
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -21,84 +19,119 @@ class FirebaseAuthRepository @Inject constructor(
     private val local: RoomAuthRepository,
     private val remote: EmailAuthService,
     private val hasher: PasswordHasher,
-    private val clock: Clock
+    private val clock: Clock,
+    private val perfiles: PerfilCuentaService
 ) : AuthRepository {
     private val dao = db.authDao()
     private val mutex = Mutex()
-    override val sesion = combine(local.sesion, remote.identidad) { session, identity ->
-        session?.takeIf { it.usuario.firebaseUid == null || it.usuario.firebaseUid == identity?.uid }
-    }.onStart { remote.actualizarSesion() }.distinctUntilChanged()
+    private val autenticando = MutableStateFlow(false)
+    // Firebase renueva sus tokens; siete días solo limita las cuentas locales antiguas.
+    override val sesion = combine(local.sesion, remote.identidad, autenticando, flow {
+        while (true) { remote.actualizarSesion(); emit(Unit); delay(60_000) }
+    }) { session, identity, busy, _ ->
+        session?.takeIf { !busy && (it.usuario.firebaseUid == null || it.usuario.firebaseUid == identity?.uid) }
+    }.distinctUntilChanged()
 
     override suspend fun registrar(datos: RegistroUsuario): ResultadoAuth = ejecutar {
         if (AuthValidator.validarRegistro(datos).isNotEmpty()) return@ejecutar ResultadoAuth.Error(ErrorAuth.DATOS_INVALIDOS)
         if (!remote.configurado) return@ejecutar ResultadoAuth.Error(ErrorAuth.SERVICIO_NO_CONFIGURADO)
         val email = AuthValidator.normalizarEmail(datos.email)
         if (dao.buscarPorEmail(email) != null) return@ejecutar ResultadoAuth.Error(ErrorAuth.EMAIL_EN_USO)
-        val identity = remote.registrar(email, datos.password)
+        autenticando.value = true
         try {
-            db.withTransaction {
-                val empresaId = dao.insertarEmpresa(EmpresaEntity(nombre = datos.empresa.trim(), sector = datos.sector, creadaEn = clock.millis()))
-                dao.insertarUsuario(UsuarioEntity(nombre = datos.nombre.trim(), apellidos = datos.apellidos.trim(),
-                    email = email, empresaId = empresaId, passwordHash = "", passwordSalt = "", passwordIterations = 0,
-                    firebaseUid = identity.uid))
+            val identity = remote.registrar(email, datos.password)
+            // Conservamos una copia recuperable. Nunca borramos una cuenta por un timeout:
+            // el servidor podría haber confirmado el alta aunque su respuesta no llegase.
+            val profile = PerfilCuentaRemoto(identity.uid, datos.nombre.trim(), datos.apellidos.trim(),
+                identity.uid, datos.empresa.trim(), datos.sector, clock.millis())
+            val published = try {
+                perfiles.crearSiFalta(profile)
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) {
+                guardarCopia(identity, profile, abrirSesion = false)
+                return@ejecutar ResultadoAuth.Error(ErrorAuth.PERFIL_SINCRONIZACION_PENDIENTE)
             }
-        } catch (e: Exception) {
-            withContext(NonCancellable) { runCatching { remote.descartarAlta(identity.uid) } }
-            throw e
-        } finally { remote.salir() }
-        ResultadoAuth.Correcto
+            guardarCopia(identity, published, abrirSesion = false)
+            ResultadoAuth.Correcto
+        } finally { remote.salir(); autenticando.value = false }
     }
 
     override suspend fun iniciarSesion(email: String, password: String): ResultadoAuth = ejecutar {
         if (AuthValidator.validarLogin(email, password, maxLength = 4096).isNotEmpty()) return@ejecutar ResultadoAuth.Error(ErrorAuth.DATOS_INVALIDOS)
         val normalized = AuthValidator.normalizarEmail(email)
-        val profile = dao.buscarPorEmail(normalized)
+        val localProfile = dao.buscarPorEmail(normalized)
         if (!remote.configurado) {
-            return@ejecutar if (profile != null && profile.firebaseUid == null) local.iniciarSesion(email, password)
-                else ResultadoAuth.Error(ErrorAuth.SERVICIO_NO_CONFIGURADO)
+            return@ejecutar if (localProfile != null && localProfile.firebaseUid == null) local.iniciarSesion(email, password)
+            else ResultadoAuth.Error(ErrorAuth.SERVICIO_NO_CONFIGURADO)
         }
+        autenticando.value = true
+        var success = false
+        try {
+            val identity = if (localProfile != null && localProfile.firebaseUid == null) {
+                // Un correo coincidente no acredita la propiedad de los datos antiguos.
+                val now = clock.millis()
+                if (localProfile.bloqueoHasta > now) return@ejecutar ResultadoAuth.Error(ErrorAuth.BLOQUEO_TEMPORAL)
+                if (!hasher.comprobar(password, PasswordDigest(localProfile.passwordHash, localProfile.passwordSalt, localProfile.passwordIterations))) {
+                    val previos = if (localProfile.bloqueoHasta in 1..now) 0 else localProfile.intentosFallidos
+                    val failures = previos + 1
+                    dao.actualizarIntentos(localProfile.id, failures, if (failures >= 5) now + 30_000 else 0)
+                    return@ejecutar ResultadoAuth.Error(ErrorAuth.CREDENCIALES_INVALIDAS)
+                }
+                try { remote.ingresar(normalized, password) }
+                catch (e: ErrorServicioAuth) {
+                    if (e.tipo != ErrorAuth.CREDENCIALES_INVALIDAS) throw e
+                    try { remote.registrar(normalized, password) }
+                    catch (collision: ErrorServicioAuth) {
+                        if (collision.tipo == ErrorAuth.EMAIL_EN_USO) throw ErrorServicioAuth(ErrorAuth.VINCULACION_NECESARIA)
+                        throw collision
+                    }
+                }
+            } else remote.ingresar(normalized, password)
 
-        val identity = if (profile != null && profile.firebaseUid == null) {
-            // Nunca se vincula una empresa antigua solo por la coincidencia del correo.
-            val now = clock.millis()
-            if (profile.bloqueoHasta > now) return@ejecutar ResultadoAuth.Error(ErrorAuth.BLOQUEO_TEMPORAL)
-            if (!hasher.comprobar(password, PasswordDigest(profile.passwordHash, profile.passwordSalt, profile.passwordIterations))) {
-                val previos = if (profile.bloqueoHasta > 0 && profile.bloqueoHasta <= now) 0 else profile.intentosFallidos
-                val failures = previos + 1
-                dao.actualizarIntentos(profile.id, failures, if (failures >= 5) now + 30_000 else 0)
+            if (AuthValidator.normalizarEmail(identity.email) != normalized ||
+                (localProfile?.firebaseUid != null && localProfile.firebaseUid != identity.uid)) {
                 return@ejecutar ResultadoAuth.Error(ErrorAuth.CREDENCIALES_INVALIDAS)
             }
-            try { remote.ingresar(normalized, password) }
-            catch (e: ErrorServicioAuth) {
-                if (e.tipo != ErrorAuth.CREDENCIALES_INVALIDAS) throw e
-                try { remote.registrar(normalized, password) }
-                catch (collision: ErrorServicioAuth) {
-                    if (collision.tipo == ErrorAuth.EMAIL_EN_USO) throw ErrorServicioAuth(ErrorAuth.VINCULACION_NECESARIA)
-                    throw collision
-                }
+            val profile = perfiles.obtener(identity.uid) ?: run {
+                // Se publica una vez desde el teléfono que conserva los datos y solo
+                // después de verificar la identidad y, si procede, la clave antigua.
+                val previous = localProfile ?: return@ejecutar ResultadoAuth.Error(ErrorAuth.PERFIL_NO_DISPONIBLE)
+                val company = requireNotNull(dao.buscarEmpresa(previous.empresaId))
+                val extras = db.perfilDao().buscarPerfil(previous.id)
+                perfiles.crearSiFalta(PerfilCuentaRemoto(identity.uid, previous.nombre, previous.apellidos,
+                    company.remoteId ?: identity.uid, company.nombre, company.sector, company.creadaEn,
+                    extras?.telefono.orEmpty(), extras?.dni.orEmpty(), extras?.cargo.orEmpty(), extras?.direccion.orEmpty(), extras?.telefonoRegion))
             }
-        } else remote.ingresar(normalized, password)
+            guardarCopia(identity, profile, abrirSesion = true)
+            success = true
+            ResultadoAuth.Correcto
+        } finally {
+            if (!success) remote.salir()
+            autenticando.value = false
+        }
+    }
 
-        if (profile == null) {
-            remote.salir()
-            return@ejecutar ResultadoAuth.Error(ErrorAuth.PERFIL_NO_DISPONIBLE)
+    private suspend fun guardarCopia(identity: IdentidadRemota, profile: PerfilCuentaRemoto, abrirSesion: Boolean) {
+        if (profile.uid != identity.uid || profile.empresaId != identity.uid) throw ErrorServicioAuth(ErrorAuth.PERFIL_NO_DISPONIBLE)
+        db.withTransaction {
+            val email = AuthValidator.normalizarEmail(identity.email)
+            val old = dao.buscarPorUid(identity.uid) ?: dao.buscarPorEmail(email)
+            if (old?.firebaseUid != null && old.firebaseUid != identity.uid) throw ErrorServicioAuth(ErrorAuth.VINCULACION_NECESARIA)
+            val companyId = old?.empresaId ?: dao.insertarEmpresa(EmpresaEntity(
+                nombre = profile.empresaNombre, sector = profile.sector, creadaEn = profile.creadaEn, remoteId = profile.empresaId))
+            dao.actualizarEmpresa(EmpresaEntity(companyId, profile.empresaNombre, profile.sector, profile.creadaEn, profile.empresaId))
+            val updated = UsuarioEntity(id = old?.id ?: 0, nombre = profile.nombre, apellidos = profile.apellidos,
+                email = email, empresaId = companyId, rol = old?.rol ?: "ADMIN", passwordHash = "", passwordSalt = "",
+                passwordIterations = 0, firebaseUid = identity.uid)
+            val userId = if (old == null) dao.insertarUsuario(updated) else old.id.also { dao.actualizarUsuario(updated) }
+            val extras = db.perfilDao().buscarPerfil(userId) ?: PerfilEntity(userId)
+            db.perfilDao().guardarPerfil(extras.copy(telefono = profile.telefono, dni = profile.dni, cargo = profile.cargo, direccion = profile.direccion, telefonoRegion = profile.telefonoRegion))
+            if (abrirSesion) dao.guardarSesion(SesionEntity(usuarioId = userId, expiraEn = Long.MAX_VALUE))
         }
-        if (identity.email != normalized || (profile.firebaseUid != null && profile.firebaseUid != identity.uid)) {
-            remote.salir()
-            return@ejecutar ResultadoAuth.Error(ErrorAuth.CREDENCIALES_INVALIDAS)
-        }
-        try {
-            db.withTransaction {
-                if (profile.firebaseUid == null) check(dao.vincularFirebase(profile.id, identity.uid) == 1)
-                dao.actualizarIntentos(profile.id, 0, 0)
-                dao.guardarSesion(SesionEntity(usuarioId = profile.id, expiraEn = clock.millis() + RoomAuthRepository.DURACION_SESION))
-            }
-        } catch (e: Exception) { remote.salir(); throw e }
-        ResultadoAuth.Correcto
     }
 
     override suspend fun cerrarSesion(): ResultadoAuth = ejecutar {
-        remote.salir()
+        remote.salir() // Solo elimina las credenciales del SDK en este dispositivo.
         dao.borrarSesion()
         ResultadoAuth.Correcto
     }
@@ -115,7 +148,7 @@ class FirebaseAuthRepository @Inject constructor(
             try { block() }
             catch (e: CancellationException) { throw e }
             catch (e: ErrorServicioAuth) { ResultadoAuth.Error(e.tipo) }
-            catch (_: SQLiteConstraintException) { ResultadoAuth.Error(ErrorAuth.EMAIL_EN_USO) }
+            catch (_: SQLiteConstraintException) { ResultadoAuth.Error(ErrorAuth.ALMACENAMIENTO) }
             catch (_: Exception) { ResultadoAuth.Error(ErrorAuth.ALMACENAMIENTO) }
         }
     }

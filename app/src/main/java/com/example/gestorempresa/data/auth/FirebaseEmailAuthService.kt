@@ -41,6 +41,7 @@ class FirebaseEmailAuthService @Inject constructor(@ApplicationContext private v
         }
     }
     override val configurado: Boolean get() = auth != null
+    internal fun firebaseApp(): FirebaseApp? = auth?.app
 
     override val identidad = callbackFlow<IdentidadRemota?> {
         val sdk = auth
@@ -85,7 +86,7 @@ class FirebaseEmailAuthService @Inject constructor(@ApplicationContext private v
         catch (_: FirebaseNetworkException) { /* Conserva la sesión local válida durante una desconexión. */ }
         catch (_: TimeoutCancellationException) { }
         catch (e: CancellationException) { throw e }
-        catch (_: Exception) { salir() }
+        catch (_: Exception) { /* Un fallo temporal del servicio no revoca una sesión. */ }
     }
 
     override suspend fun descartarAlta(uid: String) {
@@ -94,7 +95,8 @@ class FirebaseEmailAuthService @Inject constructor(@ApplicationContext private v
     override fun salir() { auth?.signOut() }
     private fun servicio() = auth ?: throw ErrorServicioAuth(ErrorAuth.SERVICIO_NO_CONFIGURADO)
 
-    private suspend fun <T> llamar(block: suspend () -> T): T = try { block() }
+    private suspend fun <T> llamar(block: suspend () -> T): T = try { withTimeout(20_000) { block() } }
+    catch (_: TimeoutCancellationException) { throw ErrorServicioAuth(ErrorAuth.SIN_CONEXION) }
     catch (e: CancellationException) { throw e }
     catch (e: ErrorServicioAuth) { throw e }
     catch (_: FirebaseNetworkException) { throw ErrorServicioAuth(ErrorAuth.SIN_CONEXION) }
