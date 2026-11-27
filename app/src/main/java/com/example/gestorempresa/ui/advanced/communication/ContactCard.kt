@@ -75,18 +75,19 @@ fun ContactCard(contact: ContactInfo, state: HomeWorkspaceState, templates: Mess
  */
 @Composable
 fun MessageComposerDialog(contact: ContactInfo, state: HomeWorkspaceState, templates: MessageTemplateStore,
-    initialTemplate: String? = null, initialValues: Map<String, String> = emptyMap(), onDismiss: () -> Unit) {
+    initialTemplate: String? = null, initialValues: Map<String, String> = emptyMap(), initialText: String? = null,
+    initialChannel: Channel? = null, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val available by templates.templates.collectAsState()
     var templateTitle by rememberSaveable { mutableStateOf(initialTemplate?.takeIf { t -> available.any { it.title == t } } ?: available.first().title) }
     val template = available.first { it.title == templateTitle }
     // Texto de ESTE mensaje: empieza como la plantilla; cambiarlo no modifica la plantilla guardada.
-    var text by rememberSaveable(templateTitle) { mutableStateOf(template.text) }
+    var text by rememberSaveable(templateTitle) { mutableStateOf(initialText?.takeIf { templateTitle == initialTemplate } ?: template.text) }
     var savedNotice by remember { mutableStateOf<String?>(null) }
     val suggestions = remember(templateTitle, state) { suggestedValues(state, contact, template) }
     val values = remember(templateTitle) { mutableStateMapOf<String, String>().apply { putAll(suggestions); if (templateTitle == initialTemplate) putAll(initialValues) } }
     var subject by rememberSaveable { mutableStateOf("Mensaje de la empresa") }
-    var channel by rememberSaveable { mutableStateOf(if (whatsappNumber(contact.phone) != null) Channel.WHATSAPP else Channel.EMAIL) }
+    var channel by rememberSaveable { mutableStateOf(initialChannel ?: if (whatsappNumber(contact.phone) != null) Channel.WHATSAPP else Channel.EMAIL) }
     // EDITAR → ENVIAR. El plan guarda el estado de cada canal.
     var sendPlan by remember { mutableStateOf<SendPlan?>(null) }
     // Vista previa antes de abrir nada. Al volver a editar se conserva todo lo escrito.

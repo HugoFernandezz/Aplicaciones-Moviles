@@ -29,13 +29,13 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 fun MessagingScreen(state: HomeWorkspaceState, templateStore: MessageTemplateStore, onBack: () -> Unit) {
-    val context = LocalContext.current
     // Plantillas compartidas con el botón de comunicación de las fichas (funciones avanzadas).
     // Mismas plantillas que en las fichas, con los cambios que el administrador haya guardado.
     val templates = templateStore.templates.collectAsState().value.associate { it.title to it.text }
     var selectedTemplate by rememberSaveable { mutableStateOf(templates.keys.first()) }
     var message by rememberSaveable { mutableStateOf(templates.values.first()) }
-    var composingFor by remember { mutableStateOf<Contact?>(null) }
+    // Persona y canal elegidos: todos los envíos pasan por el redactor, que muestra la vista previa.
+    var composingFor by remember { mutableStateOf<Pair<Contact, Channel>?>(null) }
     val people = state.employees.map {
         Contact(it.id, "${it.nombre} ${it.apellidos}", "Empleado · ${it.oficio}", it.telefono, it.email)
     } + state.subcontractors.map {
@@ -57,28 +57,29 @@ fun MessagingScreen(state: HomeWorkspaceState, templateStore: MessageTemplateSto
                     val personalizedMessage = fillTemplate(message, mapOf("NOMBRE" to person.name.substringBefore(' ')))
                     androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(enabled = whatsappNumber(person.phone) != null && personalizedMessage.isNotBlank(), onClick = {
-                            sendMessage(context, Channel.WHATSAPP, person.phone, person.email, "Mensaje de empresa", personalizedMessage)
-                        }) { Text("WhatsApp") }
+                            composingFor = person to Channel.WHATSAPP
+                        }) { Text("WhatsApp…") }
                         Button(enabled = person.email.isNotBlank() && personalizedMessage.isNotBlank(), onClick = {
-                            sendMessage(context, Channel.EMAIL, person.phone, person.email, "Mensaje de empresa", personalizedMessage)
-                        }) { Text("Correo") }
+                            composingFor = person to Channel.EMAIL
+                        }) { Text("Correo…") }
                     }
                     androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(enabled = whatsappNumber(person.phone) != null && person.email.isNotBlank() && personalizedMessage.isNotBlank(), onClick = {
                             // Se abre el redactor, que envía por los dos canales paso a paso.
-                            composingFor = person
+                            composingFor = person to Channel.BOTH
                         }) { Text("WhatsApp + Email…") }
-                        androidx.compose.material3.TextButton(onClick = { composingFor = person }) { Text("Personalizar") }
                     }
                 }
             }
         }
         item { androidx.compose.material3.TextButton(onClick = onBack) { Text("Volver a Inicio") } }
     }
-    composingFor?.let { person ->
+    composingFor?.let { (person, channel) ->
         // Los subcontratados usan id negativo en esta lista para no chocar con los empleados.
+        // Se lleva la plantilla y el texto elegidos arriba; el redactor rellena los huecos y muestra la vista previa.
         MessageComposerDialog(ContactInfo(if (person.id < 0) "SUBCONTRATADO" else "EMPLEADO", kotlin.math.abs(person.id), person.name,
-            person.phone, person.email), state, templateStore) { composingFor = null }
+            person.phone, person.email), state, templateStore, initialTemplate = selectedTemplate, initialText = message,
+            initialChannel = channel) { composingFor = null }
     }
 }
 
