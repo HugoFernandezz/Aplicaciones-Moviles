@@ -25,7 +25,7 @@ Las nuevas pruebas y sus herramientas se mantienen en `.local/excluded-tests/cur
 
 Archivos funcionales: `FirebaseAuthRepository.kt`, `FirestorePerfilCuentaService.kt`, `AuthModels.kt`, `AuthValidator.kt`, `AuthViewModel.kt`, `AuthRoot.kt`, el nuevo `CompleteAccountScreen.kt` y `app/build.gradle.kts`. No se cambian las reglas de seguridad publicadas ni el proveedor de autenticación.
 
-Base: `origin/main`, commit `93ea889`. Rama: `codex/auth-multidispositivo`.
+Base: `origin/main`, commit `93ea889`. Rama: `feature/auth-multidispositivo`.
 El trabajo está en la carpeta `auth-multidispositivo`, un worktree independiente. No se han sustituido las dos copias locales anteriores ni sus cambios de Android Studio.
 
 Actualización del requisito 4: la revisión y los resultados posteriores de Perfil y Ajustes están en [REVISION_PERFIL_AJUSTES.md](REVISION_PERFIL_AJUSTES.md), cuya suite unitaria alcanzó 128/128. Las comprobaciones posteriores de DNI y teléfonos de proveedores y subcontratados están en [REVISION_DNI_CONTACTOS.md](REVISION_DNI_CONTACTOS.md). Los resultados de 107 pruebas de este informe corresponden a la entrega anterior de autenticación y teléfonos de empleados.
@@ -168,7 +168,7 @@ Esta configuración es específica de este equipo Windows, afecta a sus ejecucio
 
 Comprobación adicional en Android Studio: la sincronización completa termina en verde el 26/11/2026 a las 19:16 (7 min 12 s, con descarga inicial de fuentes de Gradle y bibliotecas), sin los 24 errores anteriores. Quedan avisos informativos de nuevas versiones de Gradle/Android Gradle Plugin; no se han aplicado actualizaciones de versiones.
 
-Para las suites Robolectric se descargó el SDK 28 mediante Gradle y se utilizó el init script local `build/robolectric-local.init.gradle` con `-I`, evitando una descarga secundaria de Robolectric que fallaba por certificados. La fixture del esquema 2 se añadió al repositorio. OneDrive bloqueó archivos generados al cambiar de variante; la salida instrumentada se redirigió mediante el `local.properties` ignorado a `C:/Users/irene/.codex/visualizations/2026/11/26/01a217bb-c117-7d70-b495-593baebd2d02/android-auth-build`. Los informes unitarios y lint de la compilación normal permanecen en `app/build/reports` del worktree.
+Para las suites Robolectric se descargó el SDK 28 mediante Gradle y se utilizó el init script local `build/robolectric-local.init.gradle` con `-I`, evitando una descarga secundaria de Robolectric que fallaba por certificados. La fixture del esquema 2 se añadió al repositorio. OneDrive bloqueó archivos generados al cambiar de variante; la salida instrumentada se redirigió mediante el `local.properties` ignorado a un directorio local de compilación fuera de OneDrive, con una subcarpeta `android-auth-build`. Los informes unitarios y lint de la compilación normal permanecen en `app/build/reports` del worktree.
 
 ## Pruebas pendientes con dos teléfonos reales
 

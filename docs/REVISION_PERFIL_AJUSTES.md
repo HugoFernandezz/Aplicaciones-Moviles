@@ -2,7 +2,7 @@
 
 **Entrega final sin cambios de pruebas:** por petición de la usuaria, se excluyen los archivos de pruebas añadidos y nuestras modificaciones de las pruebas existentes. Se conserva una copia local ignorada en `.local/excluded-tests/`. Los resultados, comandos y listas de pruebas de este informe corresponden a la verificación anterior a esa exclusión. El código de Perfil y Ajustes se mantiene.
 
-Trabajo sobre `codex/auth-multidispositivo`, en el worktree `auth-multidispositivo`, conservando la autenticación y los teléfonos de empleados implementados anteriormente.
+Trabajo sobre `feature/auth-multidispositivo`, en el worktree `auth-multidispositivo`, conservando la autenticación y los teléfonos de empleados implementados anteriormente.
 
 ## Errores detectados y corregidos
 
